@@ -1,4 +1,4 @@
-# Pocket Ledger
+# Future Money
 
 A monthly budgeting app. Import the CSV of account activity from your bank and see what's left to spend, a 50/30/20 check, budgets by category, trends and recurring charges.
 
@@ -15,7 +15,7 @@ Pocket Ledger is a web app you install with Microsoft Edge (Chrome works too). O
 ## Each month
 
 1. Download last month's activity from your bank as CSV.
-2. Drag it onto Pocket Ledger, or right-click the file > **Open with > Pocket Ledger**.
+2. Drag it onto Pocket Ledger, or right-click the file > **Open with > Future Money**.
 3. Fix anything uncategorized, look at the Overview, and adjust next month's budgets.
 
 Use **Setup > Export backup** now and then. If you uninstall the app and choose to clear its data, your transactions are deleted.
