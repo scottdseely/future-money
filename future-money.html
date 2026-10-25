@@ -224,6 +224,7 @@ const CATS = [
   {id:'health', name:'Health', type:'need'},
   {id:'pets', name:'Pets', type:'need'},
   {id:'taxes', name:'Taxes & government', type:'need'},
+  {id:'loans', name:'Student loans & debt', type:'need'},
   {id:'dining', name:'Eating out & coffee', type:'want'},
   {id:'rides', name:'Rideshare', type:'want'},
   {id:'subs', name:'Subscriptions', type:'want'},
@@ -251,6 +252,7 @@ const RULES = [
   [/ZELLE|VENMO|CASH APP|PAYPAL/i,'income','in'],
   [/\bFEE\b|OVERDRAFT|\bNSF\b/i,'fees','out'],
   [/\bATM\b|CASH WITHDRAWAL/i,'cash','out'],
+  [/STUDENT LOAN|NELNET|MOHELA|NAVIENT|AIDVANTAGE|EDFINANCIAL|SALLIE MAE|GREAT LAKES ED|DEPT EDUCATION|AFFIRM|KLARNA|AFTERPAY|SOFI LOAN|UPSTART/i,'loans','out'],
   [/NETFLIX|SPOTIFY|HULU|DISNEY|\bHBO|\bMAX\b|YOUTUBE|APPLE\.COM|ICLOUD|AUDIBLE|KINDLE|NOTION|PELOTON|IMDB|VERCEL|CHATGPT|OPENAI|ANTHROPIC|CLAUDE\.AI|ADOBE|DROPBOX|PATREON|TWITCH|XBOX|PLAYSTATION|NINTENDO|PRIME VIDEO|AMAZON PRIME|SIRIUS|PARAMOUNT|PEACOCK|DUOLINGO|CANVA|GITHUB/i,'subs','out'],
   [/CRUNCH|PLANET FIT|EQUINOX|ORANGETHEORY|SOULCYCLE|CLASSPASS|\bGYM\b|YMCA|CLIMB|\bF45\b/i,'fitness','out'],
   [/\bPET|\bVET\b|VETERINAR|CHEWY|PETCO|PETSMART/i,'pets','out'],
@@ -261,7 +263,7 @@ const RULES = [
   [/UBER\s*\*?\s*EATS|DOORDASH|GRUBHUB|POSTMATES|CAVIAR|SEAMLESS|RESTAURA|PIZZ|CAFE|COFFEE|STARBUCKS|DUTCH BROS|PEET|CHIPOTLE|SWEETGREEN|\bCAVA\b|MCDONALD|TACO|TAQUER|SUSHI|RAMEN|BURGER|GRILL|KITCHEN|BISTRO|\bBAR\b|BREW|TST\*|SQ \*|BAKERY|\bDELI\b|BOBA|CHICK-FIL|IN-N-OUT|PANERA|WINGSTOP|HOUSTON'S|DINER|\bTHAI\b|\bPHO\b/i,'dining','out'],
   [/\bUBER\b|LYFT|UBR\*|WAYMO/i,'rides','out'],
   [/WHOLEFDS|WHOLE FOODS|SPROUTS|TRADER JOE|SAFEWAY|KROGER|RALPHS|VONS|ALDI|PUBLIX|COSTCO|WEGMANS|H-E-B|INSTACART|GROCER|MARKET|FOOD 4 LESS|SMART ?& ?FINAL|ALBERTSONS|GELSON/i,'groceries','out'],
-  [/\bGAS\b|SHELL|CHEVRON|EXXON|MOBIL\b|\bARCO\b|\bFORD\b|TOYOTA|HONDA|AUTO|PARKING|PARKMOBILE|TOLL|FASTRAK|METRO|TRANSIT|CLIPPER|JIFFY|CAR WASH|GEICO|PROGRESSIVE|STATE FARM/i,'transport','out'],
+  [/\bGAS\b|SHELL|CHEVRON|EXXON|MOBIL\b|\bARCO\b|\bFORD\b|TOYOTA|HONDA|AUTO|PARKING|PARKMOBILE|\bPKG\b|AIRPORT PARK|TOLL|FASTRAK|METRO|TRANSIT|CLIPPER|JIFFY|CAR WASH|GEICO|PROGRESSIVE|STATE FARM/i,'transport','out'],
   [/TICKETMASTER|STUBHUB|SEATGEEK|\bAMC\b|REGAL|CINEMA|THEAT|EVENTBRITE|STEAM|CONCERT|BOWL|DAVE & BUSTER|TOPGOLF|MUSEUM|AIRBNB|DELTA AIR|UNITED AIR|SOUTHWEST|ALASKA AIR|JETBLUE|HOTEL|EXPEDIA/i,'fun','out'],
   [/AMAZON|AMZN|TARGET|WALMART|BEST BUY|APPLE STORE|ETSY|SHEIN|ZARA|H&M|UNIQLO|NIKE|SEPHORA|ULTA|IKEA|TJ ?MAXX|MARSHALLS|NORDSTROM|OLD NAVY|LULULEMON|URBAN OUTF|DEPOP|EBAY|HOME DEPOT|LOWE'S/i,'shopping','out'],
 ];
@@ -275,7 +277,9 @@ const ALIASES = [
   [/TICKETMASTER/i,'Ticketmaster'],[/AVAIL RENT|\bRENT PAYMENT/i,'Rent'],
   [/INTEREST PAYMENT/i,'Interest'],[/MONTHLY SERVICE FEE/i,'Monthly service fee'],[/ATM ACCESS FEE REIMB/i,'ATM fee refund'],
   [/\bATM\b/i,'ATM withdrawal'],[/TRANSFER.*SAVINGS/i,'Transfer to savings'],[/WUVISAAFT|WESTERN UNION/i,'Western Union'],[/TRANSFER.*(VISA|CREDIT|MASTERCARD) CARD|CARD PAYMENT/i,'Credit card payment'],
-  [/ONLINE TRANSFER/i,'Online transfer'],[/VENMO CASHOUT/i,'Venmo cash-out'],[/VENMO/i,'Venmo'],
+  [/ONLINE TRANSFER/i,'Online transfer'],[/VENMO\s+CASHOUT/i,'Venmo cash-out'],[/VENMO/i,'Venmo'],
+  [/PLANET FIT/i,'Planet Fitness'],[/APPLE\.COM/i,'Apple (iCloud/App Store)'],[/NELNET/i,'Nelnet student loan'],[/MOHELA/i,'MOHELA student loan'],
+  [/GEICO/i,'GEICO'],[/MINT MOBILE/i,'Mint Mobile'],[/LULULEMON/i,'Lululemon'],
 ];
 
 /* ---------- helpers ---------- */
@@ -305,7 +309,7 @@ function merchantOf(desc){
   s=s.split(/\s{2,}/)[0];
   s=s.replace(/^(PURCHASE|RECURRING PAYMENT|POS PURCHASE|POS|DEBIT CARD PURCHASE|CHECKCARD)\s+/i,'');
   if((m=s.match(/^(TST|SQ|SP|PY|DD|PAR|IC)\s*\*\s*(.+)/i))) s=m[2]; else s=s.split('*')[0];
-  s=s.replace(/\bAchBatch\b|\bPPD ID:?.*|\bWEB ID:?.*|\bREF\s*#.*|#\S*/ig,'');
+  s=s.replace(/\bAchBatch\b|\bPPD ID:?.*|\bWEB ID:?.*|\bREF\s*#.*|#\S*/ig,'').replace(/\b(INC|LLC)?\s*PAYROLL\b|\bBILL PAYMT\b/ig,'');
   s=s.split(/\s+/).filter(w=>!/\d/.test(w)||w.length<3).join(' ').replace(/[\s\-,.]+$/,'').trim();
   if(!s) s=desc.replace(/\s+/g,' ').slice(0,32);
   return /[a-z]/.test(s)?s:titleCase(s);
