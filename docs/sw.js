@@ -1,5 +1,5 @@
 // Future Money service worker: lets the installed app open offline.
-const CACHE='future-money-f8a8396f73';
+const CACHE='future-money-15817007fd';
 const SHELL=['./','index.html','manifest.webmanifest','icons/icon.svg','icons/icon-192.png','icons/icon-512.png'];
 
 self.addEventListener('install',e=>{
