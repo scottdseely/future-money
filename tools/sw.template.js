@@ -1,4 +1,4 @@
-// Pocket Ledger service worker: lets the installed app open offline.
+// Future Money service worker: lets the installed app open offline.
 const CACHE='future-money-__VERSION__';
 const SHELL=['./','index.html','manifest.webmanifest','icons/icon.svg','icons/icon-192.png','icons/icon-512.png'];
 

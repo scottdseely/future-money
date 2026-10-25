@@ -1,4 +1,4 @@
-<title>Pocket Ledger</title>
+<title>Future Money</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -171,8 +171,8 @@ td.amt.pos{color:var(--good)}
 <div class="app">
   <header class="top">
     <div class="brand">
-      <div class="mark" aria-hidden="true">P</div>
-      <div><h1>Pocket Ledger</h1><div class="sync" id="sync">Saved on this device</div></div>
+      <div class="mark" aria-hidden="true">F</div>
+      <div><h1>Future Money</h1><div class="sync" id="sync">Saved on this device</div></div>
     </div>
     <div class="monthnav" aria-label="Month">
       <button id="prevM" aria-label="Previous month">‹</button>
@@ -372,7 +372,7 @@ function parseBankCSV(text, account){
     ci.status=-1;ci.debit=-1;ci.credit=-1;
   }
   if(ci.date==null||ci.date<0||ci.desc==null||ci.desc<0||((ci.amount==null||ci.amount<0)&&ci.debit<0&&ci.credit<0))
-    return {error:"Pocket Ledger couldn't find the date, description and amount columns in that file. Make sure you downloaded a CSV of account activity, not a PDF statement."};
+    return {error:"Future Money couldn't find the date, description and amount columns in that file. Make sure you downloaded a CSV of account activity, not a PDF statement."};
   const seen={}, txns=[];
   for(const r of body){
     const date=parseDate(r[ci.date]); if(!date) continue;
@@ -747,7 +747,7 @@ function renderSetup(){
       <ol class="steps">
         <li>Early each month, sign in to your bank's website (desktop works best).</li>
         <li>Open your checking account's activity and look for <strong>Download</strong> or <strong>Export</strong>.</li>
-        <li>Choose <strong>CSV</strong> or <strong>Comma delimited</strong>, and pick a date range that covers last month. Overlapping dates are fine: Pocket Ledger skips transactions it already has.</li>
+        <li>Choose <strong>CSV</strong> or <strong>Comma delimited</strong>, and pick a date range that covers last month. Overlapping dates are fine: Future Money skips transactions it already has.</li>
         <li>Click <strong>Import CSV</strong> above or drag the file onto this page.</li>
         <li>Check the Transactions tab for anything uncategorized and fix it. Pick "always" and it remembers next time.</li>
         <li>Look at the Overview and Subscriptions tabs, then adjust next month's budgets.</li>
@@ -766,7 +766,7 @@ function renderSetup(){
       <div class="rules">${(st.rules||[]).length?st.rules.map((r,i)=>`<div class="rrow"><span><strong>${esc(r.m)}</strong> <span class="muted">→ ${esc((CAT[r.cat]||CAT.uncat).name)}</span></span><button class="btn small" data-delrule="${i}">Remove</button></div>`).join(''):'<p class="muted">None yet. When you change a category in the Transactions tab, choose "Always" to add a rule.</p>'}</div>
     </div>
     <div class="card"><h2 style="margin-bottom:8px">Your data</h2>
-      <p class="note" style="margin-bottom:12px">${store.mode==='db'?'Saved privately to your Claude account, so only you can see it, on any device where you open this page.':'Saved in this browser only. Export a backup now and then.'} Pocket Ledger never sends your transactions anywhere else.</p>
+      <p class="note" style="margin-bottom:12px">${store.mode==='db'?'Saved privately to your Claude account, so only you can see it, on any device where you open this page.':'Saved in this browser only. Export a backup now and then.'} Future Money never sends your transactions anywhere else.</p>
       <div class="btnrow">
         <button class="btn small" data-act="exportcsv">Export categorized CSV</button>
         <button class="btn small" data-act="exportjson">Export backup</button>
@@ -865,7 +865,7 @@ async function restoreFrom(file){
     S.sample=false; S.settings={...defaultSettings(),...d.settings}; S.txns=d.txns.map(hydrate);
     S.txns.forEach(t=>old.add(monthOf(t.date)));
     persist([...old]); view.month=null; renderAll(); toast(`Restored ${S.txns.length} transactions.`);
-  }catch(e){toast("That file isn't a Pocket Ledger backup.")}
+  }catch(e){toast("That file isn't a Future Money backup.")}
 }
 function wipe(){
   if(!view.confirmWipe){view.confirmWipe=true;renderSetup();setTimeout(()=>{view.confirmWipe=false;renderSetup()},5000);return}
@@ -956,7 +956,7 @@ window.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;$('#drop').hid
   if(!window.claude&&/^https?:$/.test(location.protocol)){ // running as the installable Windows app
     if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
     if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
-    // "Open with Pocket Ledger" on a .csv in File Explorer
+    // "Open with Future Money" on a .csv in File Explorer
     if('launchQueue' in window) launchQueue.setConsumer(async p=>{ if(p.files&&p.files.length) handleFile(await p.files[0].getFile()) });
   }
 })();

@@ -1,6 +1,6 @@
 {
-  "name": "Pocket Ledger",
-  "short_name": "Pocket Ledger",
+  "name": "Future Money",
+  "short_name": "Future Money",
   "description": "Import your bank CSV each month and see what's left to spend.",
   "id": "./",
   "start_url": "./",
