@@ -1,0 +1,976 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#141A2E">
+<meta name="description" content="Import your bank CSV each month and see what's left to spend.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,-apple-system,"Segoe UI",sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head><body>
+<title>Pocket Ledger</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Figtree:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column — month header, a "left to spend" hero, then tabbed panels for detail. */
+:root{
+  --bg:#F3F5FA; --surface:#FFFFFF; --sunk:#E9EDF5; --ink:#141A2E; --muted:#5B6480; --line:#DCE1EC;
+  --accent:#3445E8; --accent-ink:#FFFFFF; --accent-soft:#E4E7FD;
+  --need:#127F86; --want:#D9682A; --save:#2C9457; --other:#8B90A6; --income:#3445E8;
+  --bad:#CC3434; --warn:#B98008; --good:#2C9457;
+  --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body:"Figtree", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono:"DM Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --r:14px;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0D1120; --surface:#161B2D; --sunk:#1E2438; --ink:#E8EBF5; --muted:#9AA2BC; --line:#2A3150;
+  --accent:#8592FF; --accent-ink:#0D1120; --accent-soft:#252C55;
+  --need:#3CC0C6; --want:#F2955A; --save:#52C483; --other:#8E94AC; --income:#8592FF;
+  --bad:#FF6E6E; --warn:#EDB43E; --good:#52C483; color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0D1120; --surface:#161B2D; --sunk:#1E2438; --ink:#E8EBF5; --muted:#9AA2BC; --line:#2A3150;
+  --accent:#8592FF; --accent-ink:#0D1120; --accent-soft:#252C55;
+  --need:#3CC0C6; --want:#F2955A; --save:#52C483; --other:#8E94AC; --income:#8592FF;
+  --bad:#FF6E6E; --warn:#EDB43E; --good:#52C483; color-scheme:dark }
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
+.app{max-width:1080px;margin:0 auto;padding-block:20px 64px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h2{font-size:1.25rem;font-weight:700}
+h3{font-size:1rem;font-weight:700}
+p{margin:0}
+.num,.amt{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.mark{width:34px;height:34px;border-radius:10px;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-family:var(--display);font-weight:800;font-size:1.05rem}
+.brand h1{font-size:1.35rem;font-weight:800}
+.sync{font-size:.78rem;color:var(--muted)}
+.monthnav{display:flex;align-items:center;gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:3px}
+.monthnav button{border:0;background:transparent;width:32px;height:32px;border-radius:999px;font-size:1.1rem;line-height:1}
+.monthnav button:hover:not(:disabled){background:var(--sunk)}
+.monthnav button:disabled{opacity:.3;cursor:default}
+.monthnav .ml{min-width:132px;text-align:center;font-weight:600}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 16px;font-weight:600}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--bad)}
+.btn.small{padding:5px 12px;font-size:.85rem}
+.linkbtn{border:0;background:none;color:var(--accent);padding:0;font-weight:600}
+
+.banner{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;background:var(--accent-soft);border-radius:var(--r);padding:12px 16px}
+.banner p{max-width:62ch}
+
+/* tabs */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+.tabs button{border:0;background:none;padding:10px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-color:var(--ink)}
+
+.panel{display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:820px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.col{display:flex;flex-direction:column;gap:18px;min-width:0}
+
+/* hero */
+.hero{display:flex;flex-direction:column;gap:14px}
+.hero .big{font-family:var(--display);font-weight:800;font-size:clamp(2.6rem,7vw,3.8rem);line-height:1;letter-spacing:-.03em}
+.hero .big.neg{color:var(--bad)}
+.hero .sub{font-size:1.02rem;max-width:46ch}
+.perday{display:inline-flex;align-items:baseline;gap:8px;background:var(--sunk);border-radius:10px;padding:8px 12px;align-self:flex-start}
+.perday strong{font-family:var(--mono);font-size:1.1rem}
+.meter{height:12px;border-radius:999px;background:var(--sunk);overflow:hidden;display:flex}
+.meter span{display:block;height:100%}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;border-top:1px solid var(--line);padding-top:14px}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat .v{font-family:var(--mono);font-size:1.05rem;font-weight:500}
+.note{font-size:.82rem;color:var(--muted)}
+
+/* 50/30/20 */
+.split{display:flex;flex-direction:column;gap:12px}
+.splitrow{display:grid;grid-template-columns:88px minmax(0,1fr) 92px;gap:10px;align-items:center}
+.splitrow .track{position:relative;height:10px;background:var(--sunk);border-radius:999px}
+.splitrow .fill{position:absolute;inset:0 auto 0 0;border-radius:999px}
+.splitrow .target{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);opacity:.55}
+.splitrow .pct{text-align:right;font-family:var(--mono);font-size:.85rem}
+.dot{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:baseline}
+
+/* budgets */
+.blist{display:flex;flex-direction:column}
+.brow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.brow:first-child{border-top:0}
+.brow .name{font-weight:600;display:flex;align-items:center;gap:8px;min-width:0}
+.brow .right{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.9rem}
+.brow .bar{grid-column:1/-1;height:7px;background:var(--sunk);border-radius:999px;overflow:hidden}
+.brow .bar span{display:block;height:100%;border-radius:999px}
+.binput{width:84px;padding:4px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:right;font-family:var(--mono);font-size:.88rem}
+.pill{display:inline-block;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:999px;letter-spacing:.02em;white-space:nowrap;font-family:var(--body)}
+.pill.ok{background:color-mix(in srgb,var(--good) 16%,transparent);color:var(--good)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.pill.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+.pill.dim{background:var(--sunk);color:var(--muted)}
+.cardhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+
+.insights{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
+.insights li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px}
+.insights .ic{font-family:var(--mono);color:var(--accent);font-weight:500}
+
+/* transactions */
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.filters input,.filters select{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.filters input{flex:1 1 200px;min-width:0}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.amt,th.amt{text-align:right;white-space:nowrap}
+td.amt.pos{color:var(--good)}
+.merch{font-weight:600}
+.raw{font-size:.75rem;color:var(--muted);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42ch}
+.catsel{padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);max-width:190px;font-size:.88rem}
+.dcell{white-space:nowrap;font-family:var(--mono);font-size:.85rem;color:var(--muted)}
+@media (max-width:620px){
+  .txtable thead{display:none}
+  .txtable tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:10px 0;border-bottom:1px solid var(--line)}
+  .txtable td{border:0;padding:0}
+  .txtable td.dcell{grid-column:1/-1}
+  .txtable td.ccell{grid-column:1/-1}
+  .raw{max-width:none}
+}
+
+/* chart */
+.chart svg{width:100%;height:auto;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--muted)}
+
+.subs .srow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:4px 16px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.subs .srow:first-child{border-top:0}
+@media (max-width:520px){.subs .srow{grid-template-columns:minmax(0,1fr) auto}.subs .srow .yr{grid-column:1/-1}}
+
+.steps{margin:0;padding-left:1.3em;display:flex;flex-direction:column;gap:8px;max-width:65ch}
+.field{display:flex;flex-direction:column;gap:6px;max-width:320px}
+.field input{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-family:var(--mono)}
+.fields{display:flex;flex-wrap:wrap;gap:16px}
+.rules{display:flex;flex-direction:column}
+.rules .rrow{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.rules .rrow:first-child{border-top:0}
+.btnrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+/* modal + toast + drop */
+.modal{position:fixed;inset:0;background:color-mix(in srgb,var(--ink) 45%,transparent);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));z-index:40}
+.sheet{background:var(--surface);border-radius:18px;max-width:640px;width:100%;max-height:100%;overflow:auto;padding:22px;display:flex;flex-direction:column;gap:16px;border:1px solid var(--line)}
+.kv{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:520px){.kv{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:12px;align-items:center;z-index:50;max-width:calc(100% - 32px);box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.toast button{border:0;background:none;color:inherit;font-weight:700;text-decoration:underline;padding:0}
+.drop{position:fixed;inset:0;z-index:45;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 22%,var(--bg));border:3px dashed var(--accent);font-family:var(--display);font-size:1.6rem;font-weight:700}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.brow .bar span,.meter span,.splitrow .fill{transition:width .4s ease}}
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">P</div>
+      <div><h1>Pocket Ledger</h1><div class="sync" id="sync">Saved on this device</div></div>
+    </div>
+    <div class="monthnav" aria-label="Month">
+      <button id="prevM" aria-label="Previous month">‹</button>
+      <span class="ml" id="monthLabel">—</span>
+      <button id="nextM" aria-label="Next month">›</button>
+    </div>
+    <button class="btn primary" id="importBtn">Import CSV</button>
+    <input type="file" id="fileIn" accept=".csv,text/csv" hidden>
+  </header>
+
+  <div id="banner"></div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button role="tab" data-tab="transactions" aria-selected="false">Transactions</button>
+    <button role="tab" data-tab="trends" aria-selected="false">Trends</button>
+    <button role="tab" data-tab="subs" aria-selected="false">Subscriptions</button>
+    <button role="tab" data-tab="setup" aria-selected="false">Setup</button>
+  </nav>
+
+  <main>
+    <section class="panel" id="tab-overview"></section>
+    <section class="panel" id="tab-transactions" hidden>
+      <div class="filters">
+        <input id="q" type="search" placeholder="Search merchant or description">
+        <select id="fcat" aria-label="Category filter"></select>
+        <select id="fscope" aria-label="Date range"><option value="month">This month</option><option value="all">All months</option></select>
+      </div>
+      <div class="card" style="padding:6px 14px"><div class="tablewrap" id="txwrap"></div></div>
+    </section>
+    <section class="panel" id="tab-trends" hidden></section>
+    <section class="panel" id="tab-subs" hidden></section>
+    <section class="panel" id="tab-setup" hidden></section>
+  </main>
+</div>
+<div class="modal" id="modal" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<div class="drop" id="drop" hidden>Drop your bank CSV</div>
+
+<script>
+/* ---------- categories & rules ---------- */
+const CATS = [
+  {id:'paycheck', name:'Paycheck', type:'income'},
+  {id:'income', name:'Other money in', type:'income'},
+  {id:'housing', name:'Rent & housing', type:'need'},
+  {id:'groceries', name:'Groceries', type:'need'},
+  {id:'utilities', name:'Phone & utilities', type:'need'},
+  {id:'transport', name:'Car, gas & transit', type:'need'},
+  {id:'health', name:'Health', type:'need'},
+  {id:'pets', name:'Pets', type:'need'},
+  {id:'taxes', name:'Taxes & government', type:'need'},
+  {id:'dining', name:'Eating out & coffee', type:'want'},
+  {id:'rides', name:'Rideshare', type:'want'},
+  {id:'subs', name:'Subscriptions', type:'want'},
+  {id:'shopping', name:'Shopping', type:'want'},
+  {id:'fun', name:'Fun & travel', type:'want'},
+  {id:'fitness', name:'Fitness', type:'want'},
+  {id:'people', name:'Sent to people', type:'other'},
+  {id:'cash', name:'Cash & ATM', type:'other'},
+  {id:'fees', name:'Bank fees', type:'other'},
+  {id:'uncat', name:'Uncategorized', type:'other'},
+  {id:'savings', name:'Savings & investing', type:'save'},
+  {id:'transfer', name:'Transfers & card payments', type:'transfer'},
+];
+const CAT = Object.fromEntries(CATS.map(c=>[c.id,c]));
+const TYPE_COLOR = {need:'var(--need)', want:'var(--want)', other:'var(--other)', save:'var(--save)', income:'var(--income)', transfer:'var(--other)'};
+const SPEND_TYPES = ['need','want','other'];
+
+// [pattern, category, direction]  direction: 'in' = money in only, 'out' = money out only
+const RULES = [
+  [/PAYROLL|DIRECT DEP|DIR DEP|ACH ?BATCH|SALARY|PAYCHECK|GUSTO|\bADP\b|PPD ID/i,'paycheck','in'],
+  [/INTEREST|REFUND|REVERSAL|REIMBURSE|CASH ?BACK|RETURN/i,'income','in'],
+  [/SAVINGS|ROBINHOOD|ACORNS|BETTERMENT|WEALTHFRONT|VANGUARD|FIDELITY|\bROTH\b|\bIRA\b/i,'savings','out'],
+  [/CARD PAYMENT|AUTOPAY|CRD PMT|CREDIT CARD|VISA CARD|MASTERCARD|AMEX EPAYMENT|CAPITAL ONE|DISCOVER E-PAYMENT|ONLINE TRANSFER|RECURRING TRANSFER|MONEYLINK|TRANSFER (TO|FROM)|APPLE CASH|XFER|\bWT \w*\d|WIRE TRANS|BROKERAGE/i,'transfer'],
+  [/ZELLE|VENMO|CASH APP|SQUARE CASH|PAYPAL|MONEY TRANSFER|WESTERN UNION/i,'people','out'],
+  [/ZELLE|VENMO|CASH APP|PAYPAL/i,'income','in'],
+  [/\bFEE\b|OVERDRAFT|\bNSF\b/i,'fees','out'],
+  [/\bATM\b|CASH WITHDRAWAL/i,'cash','out'],
+  [/NETFLIX|SPOTIFY|HULU|DISNEY|\bHBO|\bMAX\b|YOUTUBE|APPLE\.COM|ICLOUD|AUDIBLE|KINDLE|NOTION|PELOTON|IMDB|VERCEL|CHATGPT|OPENAI|ANTHROPIC|CLAUDE\.AI|ADOBE|DROPBOX|PATREON|TWITCH|XBOX|PLAYSTATION|NINTENDO|PRIME VIDEO|AMAZON PRIME|SIRIUS|PARAMOUNT|PEACOCK|DUOLINGO|CANVA|GITHUB/i,'subs','out'],
+  [/CRUNCH|PLANET FIT|EQUINOX|ORANGETHEORY|SOULCYCLE|CLASSPASS|\bGYM\b|YMCA|CLIMB|\bF45\b/i,'fitness','out'],
+  [/\bPET|\bVET\b|VETERINAR|CHEWY|PETCO|PETSMART/i,'pets','out'],
+  [/DENTIST|DENTAL|\bCVS\b|WALGREENS|PHARM|CLINIC|MEDICAL|DOCTOR|HOSPITAL|OPTOM|KAISER|THERAP|URGENT CARE|LABCORP/i,'health','out'],
+  [/\bRENT\b|APARTMENT|PROPERTY MG|\bLEASING|LANDLORD|\bHOA\b|\bAVAIL\b|RENTERS INS|LEMONADE/i,'housing','out'],
+  [/EDISON|PG&E|ELECTRIC CO|WATER DEPT|DWP|SOCALGAS|GAS CO\b|COMCAST|XFINITY|SPECTRUM|VERIZON|AT&T|T-MOBILE|MINT MOBILE|VISIBLE|INTERNET|GOOGLE FI|CRICKET/i,'utilities','out'],
+  [/\bTTC\b|\bIRS\b|\bFTB\b|\bTAX\b|\bDMV\b|CITY OF/i,'taxes','out'],
+  [/UBER\s*\*?\s*EATS|DOORDASH|GRUBHUB|POSTMATES|CAVIAR|SEAMLESS|RESTAURA|PIZZ|CAFE|COFFEE|STARBUCKS|DUTCH BROS|PEET|CHIPOTLE|SWEETGREEN|\bCAVA\b|MCDONALD|TACO|SUSHI|RAMEN|BURGER|GRILL|KITCHEN|BISTRO|\bBAR\b|BREW|TST\*|SQ \*|BAKERY|\bDELI\b|BOBA|CHICK-FIL|IN-N-OUT|PANERA|WINGSTOP|HOUSTON'S|DINER|\bTHAI\b|\bPHO\b/i,'dining','out'],
+  [/\bUBER\b|LYFT|UBR\*|WAYMO/i,'rides','out'],
+  [/WHOLEFDS|WHOLE FOODS|SPROUTS|TRADER JOE|SAFEWAY|KROGER|RALPHS|VONS|ALDI|PUBLIX|COSTCO|WEGMANS|H-E-B|INSTACART|GROCER|MARKET|FOOD 4 LESS|SMART ?& ?FINAL|ALBERTSONS|GELSON/i,'groceries','out'],
+  [/\bGAS\b|SHELL|CHEVRON|EXXON|MOBIL\b|\bARCO\b|\bFORD\b|TOYOTA|HONDA|AUTO|PARKING|PARKMOBILE|TOLL|FASTRAK|METRO|TRANSIT|CLIPPER|JIFFY|CAR WASH|GEICO|PROGRESSIVE|STATE FARM/i,'transport','out'],
+  [/TICKETMASTER|STUBHUB|SEATGEEK|\bAMC\b|REGAL|CINEMA|THEAT|EVENTBRITE|STEAM|CONCERT|BOWL|DAVE & BUSTER|TOPGOLF|MUSEUM|AIRBNB|DELTA AIR|UNITED AIR|SOUTHWEST|ALASKA AIR|JETBLUE|HOTEL|EXPEDIA/i,'fun','out'],
+  [/AMAZON|AMZN|TARGET|WALMART|BEST BUY|APPLE STORE|ETSY|SHEIN|ZARA|H&M|UNIQLO|NIKE|SEPHORA|ULTA|IKEA|TJ ?MAXX|MARSHALLS|NORDSTROM|OLD NAVY|LULULEMON|URBAN OUTF|DEPOP|EBAY|HOME DEPOT|LOWE'S/i,'shopping','out'],
+];
+
+const ALIASES = [
+  [/WHOLEFDS|WHOLE FOODS/i,'Whole Foods'],[/UBER\s*\*?\s*EATS/i,'Uber Eats'],[/\bUBER\b|UBR\*/i,'Uber'],[/LYFT/i,'Lyft'],
+  [/AUDIBLE/i,'Audible'],[/KINDLE/i,'Kindle Unlimited'],[/AMZN|AMAZON/i,'Amazon'],[/NOTION/i,'Notion'],[/PELOTON/i,'Peloton'],
+  [/VERCEL/i,'Vercel'],[/IMDB/i,'IMDbPro'],[/NETFLIX/i,'Netflix'],[/SPOTIFY/i,'Spotify'],[/HULU/i,'Hulu'],[/OPENAI|CHATGPT/i,'ChatGPT'],
+  [/STARBUCKS/i,'Starbucks'],[/TRADER JOE/i,"Trader Joe's"],[/SPROUTS/i,'Sprouts'],[/CRUNCH/i,'Crunch Fitness'],[/DOORDASH/i,'DoorDash'],
+  [/CHIPOTLE/i,'Chipotle'],[/SWEETGREEN/i,'Sweetgreen'],[/TARGET/i,'Target'],[/VERIZON/i,'Verizon'],[/EDISON/i,'SoCal Edison'],[/SHELL/i,'Shell'],
+  [/TICKETMASTER/i,'Ticketmaster'],[/AVAIL RENT|\bRENT PAYMENT/i,'Rent'],
+  [/INTEREST PAYMENT/i,'Interest'],[/MONTHLY SERVICE FEE/i,'Monthly service fee'],[/ATM ACCESS FEE REIMB/i,'ATM fee refund'],
+  [/\bATM\b/i,'ATM withdrawal'],[/TRANSFER.*SAVINGS/i,'Transfer to savings'],[/WUVISAAFT|WESTERN UNION/i,'Western Union'],[/TRANSFER.*(VISA|CREDIT|MASTERCARD) CARD|CARD PAYMENT/i,'Credit card payment'],
+  [/ONLINE TRANSFER/i,'Online transfer'],[/VENMO CASHOUT/i,'Venmo cash-out'],[/VENMO/i,'Venmo'],
+];
+
+/* ---------- helpers ---------- */
+const $ = s=>document.querySelector(s);
+const esc = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'});
+const fmt0 = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0});
+const money = n=>fmt.format(Math.abs(n)<0.005?0:n);
+const money0 = n=>fmt0.format(Math.round(n)||0);
+const titleCase = s=>s.toLowerCase().replace(/(^|[\s\-\/&(])([a-z])/g,(m,a,b)=>a+b.toUpperCase());
+const pad = n=>String(n).padStart(2,'0');
+const isoDate = d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const todayISO = ()=>isoDate(new Date());
+const monthOf = iso=>iso.slice(0,7);
+const monthLabel = (k,short)=>{const [y,m]=k.split('-').map(Number);return new Date(y,m-1,1).toLocaleString('en-US',short?{month:'short'}:{month:'long',year:'numeric'})};
+const shortDate = iso=>{const [y,m,d]=iso.split('-').map(Number);return new Date(y,m-1,d).toLocaleString('en-US',{month:'short',day:'numeric'})};
+const daysInMonth = k=>{const [y,m]=k.split('-').map(Number);return new Date(y,m,0).getDate()};
+function addMonths(k,n){const [y,m]=k.split('-').map(Number);const d=new Date(y,m-1+n,1);return `${d.getFullYear()}-${pad(d.getMonth()+1)}`}
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
+
+function merchantOf(desc){
+  for(const [re,n] of ALIASES) if(re.test(desc)) return n;
+  let m;
+  if((m=desc.match(/^(ZELLE|VENMO)\s+(TO|FROM)\s+(.+?)\s+ON\s+\d/i))) return `${titleCase(m[1])} ${m[2].toLowerCase()} ${titleCase(m[3].replace(/\s+/g,' '))}`;
+  let s=desc;
+  if((m=desc.match(/AUTHORIZED ON\s+\d{1,2}\/\d{1,2}\s+(.*)$/i))) s=m[1];
+  s=s.split(/\s{2,}/)[0];
+  s=s.replace(/^(PURCHASE|RECURRING PAYMENT|POS PURCHASE|POS|DEBIT CARD PURCHASE|CHECKCARD)\s+/i,'');
+  if((m=s.match(/^(TST|SQ|SP|PY|DD|PAR|IC)\s*\*\s*(.+)/i))) s=m[2]; else s=s.split('*')[0];
+  s=s.replace(/\bAchBatch\b|\bPPD ID:?.*|\bWEB ID:?.*|\bREF\s*#.*|#\S*/ig,'');
+  s=s.split(/\s+/).filter(w=>!/\d/.test(w)||w.length<3).join(' ').replace(/[\s\-,.]+$/,'').trim();
+  if(!s) s=desc.replace(/\s+/g,' ').slice(0,32);
+  return /[a-z]/.test(s)?s:titleCase(s);
+}
+
+function categorize(t){
+  const d=t.desc.toLowerCase(), mk=t.merchant.toLowerCase();
+  for(const r of S.settings.rules||[]){const m=r.m.toLowerCase(); if(mk===m||d.includes(m)) return r.cat}
+  const dir=t.amount>=0?'in':'out';
+  for(const [re,cat,want] of RULES){ if(want&&want!==dir) continue; if(re.test(t.desc)) return cat }
+  return dir==='in'?'income':'uncat';
+}
+
+/* ---------- CSV parsing ---------- */
+function parseCSV(text){
+  text=text.replace(/^﻿/,'');
+  const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){ if(c==='"'){ if(text[i+1]==='"'){f+='"';i++} else q=false } else f+=c }
+    else if(c==='"') q=true;
+    else if(c===','){row.push(f);f=''}
+    else if(c==='\n'||c==='\r'){ if(c==='\r'&&text[i+1]==='\n') i++; row.push(f);rows.push(row);row=[];f='' }
+    else f+=c;
+  }
+  if(f||row.length){row.push(f);rows.push(row)}
+  return rows.filter(r=>r.some(x=>x.trim()));
+}
+function parseDate(s){
+  s=(s||'').trim();let m;
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  if((m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/))){let y=+m[3];if(y<100)y+=2000;return `${y}-${pad(m[1])}-${pad(m[2])}`}
+  return null;
+}
+function parseAmount(s){
+  s=(s||'').trim(); if(!s) return NaN;
+  let neg=/^\(.*\)$/.test(s)||/^-/.test(s)||/-$/.test(s);
+  const n=parseFloat(s.replace(/[^0-9.]/g,''));
+  return isNaN(n)?NaN:(neg?-n:n);
+}
+function accountFromName(name){return (name||'Account').replace(/\.[^.]+$/,'').replace(/\s*\(\d+\)\s*$/,'').replace(/[_-]+/g,' ').trim()||'Account'}
+
+function parseBankCSV(text, account){
+  const rows=parseCSV(text);
+  if(!rows.length) return {error:'That file is empty. Download it again from your bank and pick CSV (comma-separated).'};
+  const head=rows[0].map(h=>h.trim().toLowerCase());
+  const hasHeader=!rows[0].some(c=>parseDate(c));
+  let ci={};
+  const body=hasHeader?rows.slice(1):rows;
+  if(hasHeader){
+    const find=re=>head.findIndex(h=>re.test(h));
+    ci.date=find(/^(transaction |trans\.? |posting |post )?date$/); if(ci.date<0) ci.date=find(/date/);
+    ci.desc=find(/desc|payee|merchant|^name$|details/); if(ci.desc<0) ci.desc=find(/memo/);
+    ci.amount=find(/^amount|amount$/);
+    ci.debit=find(/debit|withdraw/); ci.credit=find(/credit|deposit/);
+    ci.status=find(/status/);
+  }else{
+    const sample=body.slice(0,25), ncol=Math.max(...sample.map(r=>r.length));
+    const score=(i,fn)=>sample.filter(r=>fn(r[i])).length/sample.length;
+    let best=-1;
+    for(let i=0;i<ncol;i++){ if(score(i,parseDate)>.8){ci.date=i;break} }
+    for(let i=0;i<ncol;i++){ if(i===ci.date) continue; const s=score(i,v=>!isNaN(parseAmount(v))&&/\d\.\d|^-/.test((v||'').trim())); if(s>best){best=s;ci.amount=i} }
+    let longest=-1;
+    for(let i=0;i<ncol;i++){ if(i===ci.date||i===ci.amount) continue; const avg=sample.reduce((a,r)=>a+(r[i]||'').length,0)/sample.length; if(avg>longest){longest=avg;ci.desc=i} }
+    ci.status=-1;ci.debit=-1;ci.credit=-1;
+  }
+  if(ci.date==null||ci.date<0||ci.desc==null||ci.desc<0||((ci.amount==null||ci.amount<0)&&ci.debit<0&&ci.credit<0))
+    return {error:"Pocket Ledger couldn't find the date, description and amount columns in that file. Make sure you downloaded a CSV of account activity, not a PDF statement."};
+  const seen={}, txns=[];
+  for(const r of body){
+    const date=parseDate(r[ci.date]); if(!date) continue;
+    let amount;
+    if(ci.amount!=null&&ci.amount>=0&&!isNaN(parseAmount(r[ci.amount]))) amount=parseAmount(r[ci.amount]);
+    else{ const cr=parseAmount(r[ci.credit]), db=parseAmount(r[ci.debit]); amount=(isNaN(cr)?0:Math.abs(cr))-(isNaN(db)?0:Math.abs(db)) }
+    if(isNaN(amount)) continue;
+    const desc=(r[ci.desc]||'').trim();
+    const status=ci.status>=0&&/pend/i.test(r[ci.status]||'')?'Pending':'Posted';
+    const base=`${date}|${amount.toFixed(2)}|${desc.replace(/\s+/g,' ').toUpperCase()}`;
+    seen[base]=(seen[base]||0)+1;
+    txns.push({id:hash(base+'|'+seen[base]), date, desc, amount:Math.round(amount*100)/100, status, account});
+  }
+  if(!txns.length) return {error:'No transactions found in that file. Check that it has rows with a date and an amount.'};
+  return {txns};
+}
+function hydrate(t){ t.merchant=merchantOf(t.desc); if(!t.manual) t.cat=categorize(t); return t }
+
+/* ---------- state ---------- */
+const defaultSettings=()=>({budgets:{}, rules:[], income:0, saveGoal:20, lastImport:null});
+let S={settings:defaultSettings(), txns:[], sample:true};
+let view={tab:'overview', month:null};
+
+/* ---------- storage: private per-viewer db, with on-device fallback ---------- */
+const LS_KEY='pocket-ledger-v1';
+const store={mode:'local', profile:null,
+  readLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'null')}catch(e){return null}},
+  writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify({settings:S.settings,txns:S.txns}))}catch(e){}},
+  clearLocal(){try{localStorage.removeItem(LS_KEY)}catch(e){}},
+};
+let writeChain=Promise.resolve();
+function persist(months, settings=true){
+  if(S.sample) return;
+  store.writeLocal();
+  if(store.mode!=='db') return;
+  const ms=[...new Set(months||[])];
+  writeChain=writeChain.then(async()=>{
+    try{
+      if(settings) await store.profile.set({settings:S.settings, v:1});
+      for(const k of ms){
+        const list=S.txns.filter(t=>monthOf(t.date)===k).map(({merchant,...t})=>t);
+        const ref=store.profile.collection('months').doc(k);
+        if(list.length) await ref.set({txns:list}); else await ref.delete();
+      }
+    }catch(e){
+      store.mode='local'; renderSync();
+      toast("Couldn't save to your Claude account, so changes are kept on this device only.");
+    }
+  });
+}
+async function connectDb(){
+  if(!window.claude||!window.claude.use) return;
+  try{
+    const [db,user]=await Promise.all([claude.use('db'),claude.use('user')]);
+    if(!db||!user) return;
+    const uid=await user.id(); if(!uid) return;
+    store.profile=db.doc(`data/users/${uid}/profile`);
+    const [p,ms]=await Promise.all([store.profile.get(),store.profile.collection('months').get()]);
+    store.mode='db';
+    const remote=ms.docs.flatMap(d=>JSON.parse(JSON.stringify(d.data().txns||[])));
+    if(p.exists||remote.length){
+      const ids=new Set(remote.map(t=>t.id));
+      const localOnly=S.sample?[]:S.txns.filter(t=>!ids.has(t.id));
+      if(p.exists) S.settings={...defaultSettings(),...JSON.parse(JSON.stringify(p.data().settings||{}))};
+      S.txns=remote.concat(localOnly).map(hydrate); S.sample=false;
+      if(localOnly.length) persist(localOnly.map(t=>monthOf(t.date)));
+      store.writeLocal();
+      view.month=null;
+    }else if(!S.sample){
+      persist([...new Set(S.txns.map(t=>monthOf(t.date)))]);
+    }
+    renderAll();
+  }catch(e){ store.mode='local'; renderSync() }
+}
+
+/* ---------- example data (fictional) ---------- */
+function makeSample(){
+  let seed=11; const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646};
+  const r=(a,b)=>Math.round((a+rnd()*(b-a))*100)/100;
+  const today=new Date(); const rows=[];
+  const us=d=>`${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`, md=d=>`${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+  const ref=()=>'S'+String(Math.floor(rnd()*1e15)).padStart(15,'4');
+  const P=(d,m,city)=>`PURCHASE                                AUTHORIZED ON   ${md(d)} ${m.padEnd(24)}  ${city.padEnd(14)}  ${ref()}   CARD 4417`;
+  const R=(d,m,city)=>`RECURRING PAYMENT                       AUTHORIZED ON   ${md(d)} ${m.padEnd(24)}  ${city.padEnd(14)}  ${ref()}   CARD 4417`;
+  for(let k=3;k>=0;k--){
+    const y=today.getFullYear(), mo=today.getMonth()-k; const D=n=>new Date(y,mo,n);
+    const add=(n,desc,amt)=>{const d=D(n); if(d>today) return; const pend=(today-d)/864e5<2; rows.push([us(d),desc,amt.toFixed(2),'',pend?'Pending':'Posted'])};
+    add(1,'MAPLE & PINE CREATIVE PAYROLL     PPD ID: 4520091187',1842.16);
+    add(15,'MAPLE & PINE CREATIVE PAYROLL     PPD ID: 4520091187',1842.16);
+    add(1,'AVAIL RENT PAYMENT        WEB ID: 1800948598',-1450);
+    add(2,'RECURRING TRANSFER TO PLATINUM SAVINGS REF #OP0XH74M57 XXXXXX2291',-250);
+    add(4,R(D(3),'SPOTIFY USA','NEW YORK      NY'),-11.99);
+    add(12,R(D(11),'NETFLIX.COM','LOS GATOS     CA'),-15.49);
+    add(18,R(D(17),'OPENAI *CHATGPT SUBSCR','SAN FRANCISCO CA'),-20);
+    add(21,R(D(20),'HULU 877-8244858','SANTA MONICA  CA'),-9.99);
+    add(10,'CRUNCH FIT       CLUB FEES         2604100253925   626-803-1880',-29.99);
+    add(8,'VERIZON WIRELESS PAYMENTS        WEB ID: 2223344556',-65);
+    add(22,'SO CAL EDISON CO BILL PAYMT       WEB ID: 9900112233',-r(38,72));
+    add(20,'ONLINE TRANSFER REF #IB0XNDVPQ8 TO WELLS FARGO ACTIVE CASH VISA CARD XXXXXXXXXXXX5521',-r(150,400));
+    [3,10,17,24].forEach(n=>add(n,P(D(n),"TRADER JOE S #046",'PASADENA      CA'),-r(36,84)));
+    add(13,P(D(13),'WHOLEFDS PAS 10233','PASADENA      CA'),-r(22,48));
+    [2,6,9,16,23,27].forEach(n=>add(n,P(D(n),'STARBUCKS STORE 05521','PASADENA      CA'),-r(5.45,8.95)));
+    [7,19].forEach(n=>add(n,P(D(n),'CHIPOTLE 1187','PASADENA      CA'),-r(12.1,15.6)));
+    [5,14,26].forEach(n=>add(n,P(D(n),'DOORDASH*THAI PALACE','SAN FRANCISCO CA'),-r(24,43)));
+    add(11,P(D(11),'TST* THE SUNSET BAR','LOS ANGELES   CA'),-r(32,68));
+    add(25,P(D(25),'SWEETGREEN OLD PAS','PASADENA      CA'),-r(14.5,17));
+    [6,13,28].forEach(n=>add(n,P(D(n),'UBER *TRIP','SAN FRANCISCO CA'),-r(13,34)));
+    [9,23].forEach(n=>add(n,P(D(n),'AMAZON MKTPL*2K4L19PQ3','Amzn.com/bill WA'),-r(16,68)));
+    add(17,P(D(17),'TARGET 00012345','PASADENA      CA'),-r(24,72));
+    [5,19].forEach(n=>add(n,P(D(n),'SHELL OIL 57444211','PASADENA      CA'),-r(41,58)));
+    if(k===1) add(16,P(D(16),'TICKETMASTER','800-653-8000  CA'),-112.4);
+    [8,21].forEach(n=>add(n,'VENMO            PAYMENT    1038829441      WEB ID: 3264681992',-r(18,46)));
+    if(k===2) add(14,'VENMO            CASHOUT    1038822001      PPD',42);
+    add(12,'ATM WITHDRAWAL                 AUTHORIZED ON   '+md(D(12))+' 410 E COLORADO BLVD       PASADENA      CA  0002249           ATM ID 9851V    CARD 4417',-60);
+    add(1,'MONTHLY SERVICE FEE',-5);
+    if(k>0) add(new Date(y,mo+1,0).getDate(),'INTEREST PAYMENT',0.04);
+  }
+  rows.sort((a,b)=>new Date(b[0])-new Date(a[0]));
+  const csv=['DATE,DESCRIPTION,AMOUNT,CHECK #,STATUS',...rows.map(r=>r.map(v=>/[,"]/.test(v)?`"${v.replace(/"/g,'""')}"`:v).join(','))].join('\n');
+  return parseBankCSV(csv,'Checking').txns;
+}
+const SAMPLE_SETTINGS={budgets:{housing:1450,groceries:300,utilities:130,transport:110,dining:260,rides:75,subs:60,shopping:150,fun:80,fitness:30,people:60,cash:60},rules:[],income:3684,saveGoal:20,lastImport:null};
+
+/* ---------- derived numbers ---------- */
+const monthsWithData=()=>[...new Set(S.txns.map(t=>monthOf(t.date)))].sort();
+const inMonth=k=>S.txns.filter(t=>monthOf(t.date)===k);
+function summarize(k){
+  const list=inMonth(k), by={};
+  let income=0,spend=0,saved=0,transfer=0; const type={need:0,want:0,other:0};
+  for(const t of list){
+    const c=CAT[t.cat]||CAT.uncat;
+    if(c.type==='income'){income+=t.amount}
+    else if(c.type==='transfer'){transfer+=Math.abs(t.amount)}
+    else if(c.type==='save'){saved-=t.amount}
+    else {spend-=t.amount; type[c.type]-=t.amount; by[c.id]=(by[c.id]||0)-t.amount}
+  }
+  return {list,income,spend,saved,transfer,type,by};
+}
+function planIncome(k){
+  if(S.settings.income>0) return S.settings.income;
+  const prev=[1,2,3].map(n=>summarize(addMonths(k,-n)).income).filter(v=>v>0);
+  if(prev.length) return prev.reduce((a,b)=>a+b,0)/prev.length;
+  return summarize(k).income;
+}
+const totalBudget=()=>Object.entries(S.settings.budgets).filter(([id])=>CAT[id]&&SPEND_TYPES.includes(CAT[id].type)).reduce((a,[,v])=>a+(+v||0),0);
+
+/* ---------- rendering ---------- */
+function renderAll(){
+  const months=monthsWithData();
+  if(!view.month||!months.includes(view.month)) view.month=months[months.length-1]||monthOf(todayISO());
+  const i=months.indexOf(view.month);
+  $('#monthLabel').textContent=monthLabel(view.month);
+  $('#prevM').disabled=i<=0; $('#nextM').disabled=i<0||i>=months.length-1;
+  renderSync(); renderBanner(); renderOverview(); renderTxns(); renderTrends(); renderSubs(); renderSetup();
+}
+function renderSync(){
+  $('#sync').textContent=S.sample?'Showing example data':store.mode==='db'?'Saved privately to your Claude account':'Saved on this device only';
+}
+function renderBanner(){
+  const b=$('#banner');
+  if(S.sample){
+    b.innerHTML=`<div class="banner"><p><strong>These are made-up example numbers</strong> for a 24-year-old with a $3,684 monthly take-home. Import a CSV from your bank to see your own month. Your data stays private to you.</p><button class="btn primary small" data-act="import">Import my CSV</button></div>`;
+    return;
+  }
+  const last=S.settings.lastImport?new Date(S.settings.lastImport):null;
+  const latest=monthsWithData().slice(-1)[0], cur=monthOf(todayISO());
+  if(last&&(Date.now()-last)/864e5>27){
+    b.innerHTML=`<div class="banner"><p><strong>Time for your monthly check-in.</strong> Your last import was ${last.toLocaleDateString('en-US',{month:'long',day:'numeric'})}. Download last month's CSV from your bank and drop it here.</p><button class="btn primary small" data-act="import">Import CSV</button></div>`;
+  }else if(latest&&latest<cur){
+    b.innerHTML=`<div class="banner"><p>Your newest transactions are from ${monthLabel(latest)}. Import a fresh CSV to see ${monthLabel(cur).split(' ')[0]}.</p><button class="btn small" data-act="import">Import CSV</button></div>`;
+  }else b.innerHTML='';
+}
+
+function statusPill(spent,budget){
+  if(!budget) return spent>0?'<span class="pill dim">No budget</span>':'';
+  const p=spent/budget;
+  if(p>1) return `<span class="pill bad">Over by ${money0(spent-budget)}</span>`;
+  if(p>=.85) return `<span class="pill warn">${Math.round(p*100)}% used</span>`;
+  return `<span class="pill ok">${money0(budget-spent)} left</span>`;
+}
+
+function renderOverview(){
+  const el=$('#tab-overview'), k=view.month, s=summarize(k);
+  if(!s.list.length){el.innerHTML=`<div class="card empty">No transactions in ${monthLabel(k)} yet. Import a CSV that covers this month.</div>`;return}
+  const cur=monthOf(todayISO()), isCur=k===cur;
+  const inc=planIncome(k), goal=S.settings.saveGoal||0, tb=totalBudget();
+  const plan=tb>0?tb:inc*(1-goal/100);
+  const left=plan-s.spend;
+  const dLeft=isCur?daysInMonth(k)-new Date().getDate()+1:0;
+  const monthName=monthLabel(k).split(' ')[0];
+  const planWord=tb>0?'your budget':`your take-home minus a ${goal}% savings goal`;
+
+  let heroTop,heroSub;
+  if(isCur){
+    heroTop=`<div class="label">Left to spend in ${monthName}</div><div class="big ${left<0?'neg':''}">${left<0?'−':''}${money0(Math.abs(left))}</div>`;
+    heroSub=left>=0?`You've spent ${money0(s.spend)} of ${money0(plan)} (${planWord}).`:`You're ${money0(-left)} past ${planWord}. Ease off the wants for the rest of the month.`;
+  }else{
+    heroTop=`<div class="label">${monthName} result</div><div class="big ${left<0?'neg':''}">${left<0?'−':'+'}${money0(Math.abs(left))}</div>`;
+    heroSub=left>=0?`You came in ${money0(left)} under ${planWord}. You spent ${money0(s.spend)} of ${money0(plan)}.`:`You went ${money0(-left)} over ${planWord}. You spent ${money0(s.spend)} of ${money0(plan)}.`;
+  }
+  const pctUsed=plan>0?Math.min(100,s.spend/plan*100):0;
+  const needW=plan>0?Math.min(100,s.type.need/plan*100):0, wantW=plan>0?Math.min(100-needW,(s.type.want+s.type.other)/plan*100):0;
+  const leftover=s.income-s.spend-s.saved;
+
+  // 50/30/20
+  const base=s.income>0?s.income:inc;
+  const needsP=base?s.type.need/base*100:0, wantsP=base?(s.type.want+s.type.other)/base*100:0, saveP=base?Math.max(0,100-needsP-wantsP):0;
+  const srow=(name,color,p,target,tip)=>`<div class="splitrow"><div><span class="dot" style="background:${color}"></span>${name}</div><div class="track" title="${esc(tip)}"><div class="fill" style="width:${Math.min(100,p)}%;background:${color}"></div><div class="target" style="left:${target}%"></div></div><div class="pct">${Math.round(p)}% <span class="muted">/ ${target}</span></div></div>`;
+
+  // budgets
+  const spendCats=CATS.filter(c=>SPEND_TYPES.includes(c.type));
+  const showAll=view.showAllCats;
+  const rows=spendCats.filter(c=>showAll||(s.by[c.id]||0)>0.004||S.settings.budgets[c.id]>0)
+    .sort((a,b)=>SPEND_TYPES.indexOf(a.type)-SPEND_TYPES.indexOf(b.type)||(s.by[b.id]||0)-(s.by[a.id]||0));
+  const maxSpent=Math.max(1,...rows.map(c=>s.by[c.id]||0));
+  const budgetRows=rows.map(c=>{
+    const spent=Math.max(0,s.by[c.id]||0), bud=+S.settings.budgets[c.id]||0;
+    const w=bud?Math.min(100,spent/bud*100):spent/maxSpent*100;
+    const col=bud&&spent>bud?'var(--bad)':TYPE_COLOR[c.type];
+    return `<div class="brow"><div class="name"><span class="dot" style="background:${TYPE_COLOR[c.type]}"></span><span>${esc(c.name)}</span>${statusPill(spent,bud)}</div>
+      <div class="right"><span>${money0(spent)}</span><span class="muted">of</span><input class="binput" id="b-${c.id}" data-budget="${c.id}" inputmode="decimal" value="${bud||''}" placeholder="—" aria-label="${esc(c.name)} budget"></div>
+      <div class="bar"><span style="width:${w}%;background:${col};${bud?'':'opacity:.45'}"></span></div></div>`;
+  }).join('');
+
+  el.innerHTML=`<div class="grid2">
+    <div class="col">
+      <div class="card hero">
+        <div>${heroTop}</div>
+        <p class="sub">${heroSub}</p>
+        ${isCur&&left>0?`<div class="perday"><strong>${money(left/dLeft)}</strong><span class="muted">a day for the next ${dLeft} day${dLeft>1?'s':''}</span></div>`:''}
+        <div class="meter" role="img" aria-label="${Math.round(pctUsed)}% of plan used"><span style="width:${needW}%;background:var(--need)"></span><span style="width:${wantW}%;background:var(--want)"></span></div>
+        <div class="legend"><span><span class="dot" style="background:var(--need)"></span>Needs ${money0(s.type.need)}</span><span><span class="dot" style="background:var(--want)"></span>Wants &amp; other ${money0(s.type.want+s.type.other)}</span></div>
+        <div class="stats">
+          <div class="stat"><div class="label">Money in</div><div class="v">${money0(s.income)}</div></div>
+          <div class="stat"><div class="label">Spent</div><div class="v">${money0(s.spend)}</div></div>
+          <div class="stat"><div class="label">To savings</div><div class="v">${money0(s.saved)}</div></div>
+          <div class="stat"><div class="label">Left over</div><div class="v" style="color:${leftover<0?'var(--bad)':'inherit'}">${leftover<0?'−':''}${money0(Math.abs(leftover))}</div></div>
+        </div>
+        ${s.transfer>0?`<p class="note">${money0(s.transfer)} in transfers between your own accounts and card payments isn't counted as spending.</p>`:''}
+      </div>
+      <div class="card">
+        <div class="cardhead"><h2>The 50/30/20 check</h2><span class="note">share of ${s.income>0?'money in':'expected take-home'}</span></div>
+        <div class="split">
+          ${srow('Needs','var(--need)',needsP,50,'Rent, groceries, bills, transport, health')}
+          ${srow('Wants','var(--want)',wantsP,30,'Eating out, rides, shopping, subscriptions, cash')}
+          ${srow('Saved','var(--save)',saveP,20,'Everything you did not spend, including transfers to savings')}
+        </div>
+        <p class="note" style="margin-top:12px">A common starting rule: about half your take-home on needs, under a third on wants, and at least a fifth saved. The tick marks the target.</p>
+      </div>
+      <div class="card"><h2 style="margin-bottom:12px">What stands out</h2><ul class="insights">${insights(k,s).map(x=>`<li><span class="ic">→</span><span>${x}</span></li>`).join('')}</ul></div>
+    </div>
+    <div class="col">
+      <div class="card">
+        <div class="cardhead"><h2>Budget by category</h2><div class="btnrow"><button class="linkbtn" data-act="suggest">Suggest from last 3 months</button></div></div>
+        <div class="blist">${budgetRows||'<p class="muted">No spending yet this month.</p>'}</div>
+        <div class="btnrow" style="margin-top:10px"><button class="linkbtn" data-act="allcats">${showAll?'Hide empty categories':'Add a budget for another category'}</button>${tb>0?`<span class="note" style="margin-left:auto">Total monthly budget ${money0(tb)}</span>`:''}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function insights(k,s){
+  const out=[];
+  const merch={};
+  for(const t of s.list){const c=CAT[t.cat]; if(c&&SPEND_TYPES.includes(c.type)&&t.amount<0) merch[t.merchant]=(merch[t.merchant]||0)-t.amount}
+  const top=Object.entries(merch).sort((a,b)=>b[1]-a[1]).slice(0,3);
+  if(top.length) out.push(`Most money went to ${top.map(([m,v])=>`<strong>${esc(m)}</strong> (${money0(v)})`).join(', ')}.`);
+  const prev=summarize(addMonths(k,-1));
+  if(prev.list.length){
+    let big=null;
+    for(const c of CATS.filter(c=>SPEND_TYPES.includes(c.type))){const d=(s.by[c.id]||0)-(prev.by[c.id]||0); if(!big||Math.abs(d)>Math.abs(big.d)) big={c,d}}
+    if(big&&Math.abs(big.d)>=20) out.push(`${esc(big.c.name)} is ${big.d>0?'up':'down'} ${money0(Math.abs(big.d))} from ${monthLabel(addMonths(k,-1)).split(' ')[0]}.`);
+  }
+  const dining=(s.by.dining||0)+(s.by.rides||0);
+  if(dining>0&&s.income>0) out.push(`Eating out and rides took ${Math.round(dining/s.income*100)}% of your money in (${money0(dining)}).`);
+  const fees=s.by.fees||0;
+  if(fees>0) out.push(`You paid <strong>${money(fees)}</strong> in bank fees. Many banks waive monthly fees with a minimum balance or direct deposit, so it's worth asking.`);
+  const subs=detectSubs().filter(x=>x.active);
+  if(subs.length){const m=subs.reduce((a,x)=>a+x.amount,0); out.push(`${subs.length} recurring charges add up to ${money0(m)} a month, or ${money0(m*12)} a year.`)}
+  if(s.by.uncat>0){const n=s.list.filter(t=>t.cat==='uncat').length; out.push(`${n} transaction${n>1?'s are':' is'} uncategorized. Sort them in the Transactions tab so your budget stays accurate.`)}
+  if(!out.length) out.push('Nothing unusual this month.');
+  return out;
+}
+
+/* transactions */
+function renderTxns(){
+  const fc=$('#fcat'), cur=fc.value;
+  fc.innerHTML=`<option value="">All categories</option>`+CATS.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  fc.value=cur; renderTxTable();
+}
+function catOptions(sel){return CATS.map(c=>`<option value="${c.id}"${c.id===sel?' selected':''}>${esc(c.name)}</option>`).join('')}
+function renderTxTable(){
+  const q=$('#q').value.trim().toLowerCase(), fc=$('#fcat').value, scope=$('#fscope').value;
+  let list=scope==='all'?S.txns.slice():inMonth(view.month);
+  if(fc) list=list.filter(t=>t.cat===fc);
+  if(q) list=list.filter(t=>t.merchant.toLowerCase().includes(q)||t.desc.toLowerCase().includes(q));
+  list.sort((a,b)=>b.date.localeCompare(a.date)||a.amount-b.amount);
+  const total=list.reduce((a,t)=>a+t.amount,0);
+  $('#txwrap').innerHTML=list.length?`<table class="txtable"><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th class="amt">Amount</th></tr></thead><tbody>${
+    list.slice(0,600).map(t=>`<tr><td class="dcell">${shortDate(t.date)}${scope==='all'?' '+t.date.slice(0,4):''}</td>
+      <td style="min-width:0"><div class="merch">${esc(t.merchant)} ${t.status==='Pending'?'<span class="pill dim">Pending</span>':''}</div><div class="raw" title="${esc(t.desc)}">${esc(t.desc.replace(/\s+/g,' '))}</div></td>
+      <td class="ccell"><select class="catsel" id="c-${t.id}" data-tx="${t.id}" aria-label="Category">${catOptions(t.cat)}</select></td>
+      <td class="amt ${t.amount>0?'pos':''}">${t.amount>0?'+':''}${money(t.amount)}</td></tr>`).join('')
+  }</tbody></table><p class="note" style="padding:10px">${list.length} transactions · net ${money(total)}${list.length>600?' · showing the newest 600':''}</p>`:`<div class="empty">No transactions match.</div>`;
+}
+
+/* trends */
+function renderTrends(){
+  const el=$('#tab-trends'); const months=monthsWithData();
+  if(!months.length){el.innerHTML='<div class="card empty">Import a CSV to see trends.</div>';return}
+  const end=view.month, ks=[]; for(let i=5;i>=0;i--){const k=addMonths(end,-i); if(k>=months[0]) ks.push(k)}
+  const data=ks.map(k=>({k,...summarize(k)}));
+  const max=Math.max(100,...data.map(d=>Math.max(d.income,d.spend)));
+  const step=[100,250,500,1000,2500,5000,10000,25000].find(s=>max/s<=5)||Math.ceil(max/5/1000)*1000;
+  const top=Math.ceil(max/step)*step;
+  const W=640,H=260,L=56,R=12,T=12,B=30, cw=(W-L-R)/ks.length, y=v=>T+(H-T-B)*(1-v/top);
+  let svg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Money in and spending by month">`;
+  for(let v=0;v<=top;v+=step){svg+=`<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" stroke-width="1"/><text x="${L-8}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="DM Mono, monospace">${v>=1000?'$'+(v/1000)+'k':'$'+v}</text>`}
+  data.forEach((d,i)=>{
+    const x=L+i*cw, bw=Math.min(28,cw*.3);
+    const ix=x+cw/2-bw-2, sx=x+cw/2+2;
+    svg+=`<rect x="${ix}" y="${y(d.income)}" width="${bw}" height="${y(0)-y(d.income)}" rx="3" fill="var(--income)" opacity=".85"><title>${monthLabel(d.k)} money in ${money0(d.income)}</title></rect>`;
+    let acc=0;
+    for(const [t,col] of [['need','var(--need)'],['want','var(--want)'],['other','var(--other)']]){
+      const v=Math.max(0,d.type[t]); if(!v) continue;
+      svg+=`<rect x="${sx}" y="${y(acc+v)}" width="${bw}" height="${y(acc)-y(acc+v)}" fill="${col}"><title>${monthLabel(d.k)} ${t} ${money0(v)}</title></rect>`; acc+=v;
+    }
+    svg+=`<text x="${x+cw/2}" y="${H-10}" text-anchor="middle" font-size="12" fill="${d.k===end?'var(--ink)':'var(--muted)'}" font-weight="${d.k===end?700:400}" font-family="Figtree, sans-serif">${monthLabel(d.k,true)}</text>`;
+  });
+  svg+='</svg>';
+  const topCats=CATS.filter(c=>SPEND_TYPES.includes(c.type)).map(c=>({c,t:data.reduce((a,d)=>a+(d.by[c.id]||0),0)})).filter(x=>x.t>0).sort((a,b)=>b.t-a.t).slice(0,8);
+  el.innerHTML=`<div class="card chart"><div class="cardhead"><h2>Money in vs. spending</h2><div class="legend"><span><span class="dot" style="background:var(--income)"></span>Money in</span><span><span class="dot" style="background:var(--need)"></span>Needs</span><span><span class="dot" style="background:var(--want)"></span>Wants</span><span><span class="dot" style="background:var(--other)"></span>Other</span></div></div>${svg}<p class="note">Transfers between your own accounts, card payments and money moved to savings are left out.</p></div>
+  <div class="card"><h2 style="margin-bottom:8px">Top categories by month</h2><div class="tablewrap"><table><thead><tr><th>Category</th>${ks.map(k=>`<th class="amt">${monthLabel(k,true)}</th>`).join('')}<th class="amt">Average</th></tr></thead><tbody>${
+    topCats.map(({c,t})=>`<tr><td><span class="dot" style="background:${TYPE_COLOR[c.type]}"></span>${esc(c.name)}</td>${data.map(d=>`<td class="amt">${d.by[c.id]?money0(d.by[c.id]):'<span class="muted">—</span>'}</td>`).join('')}<td class="amt"><strong>${money0(t/ks.length)}</strong></td></tr>`).join('')
+  }</tbody></table></div></div>`;
+}
+
+/* subscriptions */
+function detectSubs(){
+  const groups={};
+  for(const t of S.txns){
+    const c=CAT[t.cat]; if(t.amount>=0||!c||!['want','need','other'].includes(c.type)||['cash','people','groceries','dining','rides','shopping','transport','fees'].includes(c.id)) continue;
+    (groups[t.merchant]=groups[t.merchant]||[]).push(t);
+  }
+  const latest=S.txns.reduce((a,t)=>t.date>a?t.date:a,'');
+  const out=[];
+  for(const [m,list] of Object.entries(groups)){
+    const months=new Set(list.map(t=>monthOf(t.date)));
+    if(months.size<2) continue;
+    const amts=list.map(t=>-t.amount).sort((a,b)=>a-b), med=amts[Math.floor(amts.length/2)];
+    if(amts.filter(a=>Math.abs(a-med)/med<=.3).length/amts.length<.7) continue;
+    const last=list.reduce((a,t)=>t.date>a?t.date:a,'');
+    const gap=(new Date(latest)-new Date(last))/864e5;
+    out.push({merchant:m,amount:med,count:months.size,last,active:gap<=40,cat:list[0].cat});
+  }
+  return out.sort((a,b)=>b.active-a.active||b.amount-a.amount);
+}
+function renderSubs(){
+  const el=$('#tab-subs'), subs=detectSubs(), act=subs.filter(s=>s.active), mo=act.reduce((a,s)=>a+s.amount,0);
+  el.innerHTML=`<div class="card"><div class="cardhead"><h2>Recurring charges</h2><span class="note">charges from the same place in 2 or more months at about the same price</span></div>
+    ${subs.length?`<div class="stats" style="border:0;padding:0 0 14px;grid-template-columns:repeat(3,minmax(0,1fr))"><div class="stat"><div class="label">Active</div><div class="v">${act.length}</div></div><div class="stat"><div class="label">Per month</div><div class="v">${money(mo)}</div></div><div class="stat"><div class="label">Per year</div><div class="v">${money0(mo*12)}</div></div></div>
+    <div class="subs">${subs.map(s=>`<div class="srow"><div><div class="merch">${esc(s.merchant)} ${s.active?'':'<span class="pill dim">No charge in 40+ days</span>'}</div><div class="note">${esc((CAT[s.cat]||CAT.uncat).name)} · seen in ${s.count} months · last ${shortDate(s.last)}</div></div><div class="amt">${money(s.amount)}<span class="muted">/mo</span></div><div class="amt yr muted">${money0(s.amount*12)}/yr</div></div>`).join('')}</div>
+    <p class="note" style="margin-top:14px">Go through this list once a month. If you haven't used one in the last few weeks, cancel it. You can always sign up again.</p>`:'<p class="muted">No recurring charges found yet. They show up once you have two or more months of data.</p>'}
+  </div>`;
+}
+
+/* setup */
+function renderSetup(){
+  const el=$('#tab-setup'), st=S.settings;
+  el.innerHTML=`<div class="grid2"><div class="col">
+    <div class="card"><h2 style="margin-bottom:12px">Your monthly routine</h2>
+      <ol class="steps">
+        <li>Early each month, sign in to your bank's website (desktop works best).</li>
+        <li>Open your checking account's activity and look for <strong>Download</strong> or <strong>Export</strong>.</li>
+        <li>Choose <strong>CSV</strong> or <strong>Comma delimited</strong>, and pick a date range that covers last month. Overlapping dates are fine: Pocket Ledger skips transactions it already has.</li>
+        <li>Click <strong>Import CSV</strong> above or drag the file onto this page.</li>
+        <li>Check the Transactions tab for anything uncategorized and fix it. Pick "always" and it remembers next time.</li>
+        <li>Look at the Overview and Subscriptions tabs, then adjust next month's budgets.</li>
+      </ol>
+      <p class="note" style="margin-top:12px">Pay bills with a credit card? Import that card's CSV too, so those purchases count. Card payments from checking are treated as transfers, so nothing gets counted twice.</p>
+    </div>
+    <div class="card"><h2 style="margin-bottom:12px">Plan</h2>
+      <div class="fields">
+        <label class="field"><span class="label">Monthly take-home pay</span><input id="setIncome" inputmode="decimal" value="${st.income||''}" placeholder="Average of your last 3 months"></label>
+        <label class="field"><span class="label">Savings goal (% of take-home)</span><input id="setGoal" inputmode="numeric" value="${st.saveGoal}"></label>
+      </div>
+      <p class="note" style="margin-top:10px">Used for "left to spend" when you haven't set category budgets.</p>
+    </div></div>
+    <div class="col">
+    <div class="card"><h2 style="margin-bottom:8px">Your category rules</h2>
+      <div class="rules">${(st.rules||[]).length?st.rules.map((r,i)=>`<div class="rrow"><span><strong>${esc(r.m)}</strong> <span class="muted">→ ${esc((CAT[r.cat]||CAT.uncat).name)}</span></span><button class="btn small" data-delrule="${i}">Remove</button></div>`).join(''):'<p class="muted">None yet. When you change a category in the Transactions tab, choose "Always" to add a rule.</p>'}</div>
+    </div>
+    <div class="card"><h2 style="margin-bottom:8px">Your data</h2>
+      <p class="note" style="margin-bottom:12px">${store.mode==='db'?'Saved privately to your Claude account, so only you can see it, on any device where you open this page.':'Saved in this browser only. Export a backup now and then.'} Pocket Ledger never sends your transactions anywhere else.</p>
+      <div class="btnrow">
+        <button class="btn small" data-act="exportcsv">Export categorized CSV</button>
+        <button class="btn small" data-act="exportjson">Export backup</button>
+        <button class="btn small" data-act="restore">Restore backup</button>
+        <input type="file" id="restoreIn" accept=".json,application/json" hidden>
+        <button class="btn small danger" data-act="wipe">${view.confirmWipe?'Tap again to delete everything':'Delete all data'}</button>
+      </div>
+    </div></div></div>`;
+}
+
+/* ---------- import flow ---------- */
+let pending=null;
+async function handleFile(file){
+  if(!file) return;
+  if(/\.json$/i.test(file.name)) return restoreFrom(file);
+  let text; try{text=await file.text()}catch(e){toast("Couldn't read that file.");return}
+  const res=parseBankCSV(text,accountFromName(file.name));
+  if(res.error){toast(res.error);return}
+  pending={txns:res.txns.map(hydrate), name:file.name, account:accountFromName(file.name)};
+  openReview();
+}
+function openReview(){
+  const p=pending, t=p.txns;
+  const have=new Set(S.sample?[]:S.txns.map(x=>x.id));
+  const fresh=t.filter(x=>!have.has(x.id)).length;
+  const dates=t.map(x=>x.date).sort();
+  const inn=t.filter(x=>x.amount>0).reduce((a,x)=>a+x.amount,0), out=t.filter(x=>x.amount<0).reduce((a,x)=>a-x.amount,0);
+  const pend=t.filter(x=>x.status==='Pending').length;
+  const prev=t.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const m=$('#modal');
+  m.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="revT">
+    <div><div class="label">${esc(p.name)}</div><h2 id="revT">${t.length} transactions, ${shortDate(dates[0])} – ${shortDate(dates[dates.length-1])}, ${dates[dates.length-1].slice(0,4)}</h2></div>
+    <div class="kv">
+      <div class="stat"><div class="label">New</div><div class="v num">${fresh}</div></div>
+      <div class="stat"><div class="label">Already imported</div><div class="v num">${t.length-fresh}</div></div>
+      <div class="stat"><div class="label">Pending</div><div class="v num">${pend}</div></div>
+      <div class="stat"><div class="label">Money in</div><div class="v num">${money0(inn)}</div></div>
+      <div class="stat"><div class="label">Money out</div><div class="v num">${money0(out)}</div></div>
+    </div>
+    <label class="field" style="max-width:none"><span class="label">Account name</span><input id="acctName" value="${esc(p.account)}"></label>
+    <div class="tablewrap"><table><tbody>${prev.map(x=>`<tr><td class="dcell">${shortDate(x.date)}</td><td><div class="merch">${esc(x.merchant)}</div><div class="note">${esc((CAT[x.cat]||CAT.uncat).name)}</div></td><td class="amt ${x.amount>0?'pos':''}">${x.amount>0?'+':''}${money(x.amount)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="note">Purchases should show as negative. If they look backwards (common with credit card files), flip them.${S.sample?' Importing replaces the example data.':''}${pend?' Pending items are replaced automatically when they post.':''}</p>
+    <div class="btnrow"><button class="btn small" data-act="flip">Flip amounts</button><span style="flex:1"></span><button class="btn" data-act="cancel">Cancel</button><button class="btn primary" data-act="commit">Import ${fresh} new</button></div>
+  </div>`;
+  m.hidden=false; m.querySelector('[data-act="commit"]').focus();
+}
+function commitImport(){
+  const acct=($('#acctName')?.value||pending.account).trim()||'Account';
+  const incoming=pending.txns.map(t=>({...t,account:acct}));
+  if(S.sample){S.sample=false;S.txns=[];S.settings=defaultSettings()}
+  const dates=incoming.map(t=>t.date).sort(), lo=dates[0], hi=dates[dates.length-1];
+  const touched=new Set();
+  S.txns=S.txns.filter(t=>{const drop=t.status==='Pending'&&t.date>=lo&&t.date<=hi&&t.account===acct; if(drop) touched.add(monthOf(t.date)); return !drop});
+  const have=new Set(S.txns.map(t=>t.id)); let added=0;
+  for(const t of incoming){ if(!have.has(t.id)){S.txns.push(hydrate(t));have.add(t.id);added++;touched.add(monthOf(t.date))} }
+  S.settings.lastImport=new Date().toISOString();
+  persist([...touched]);
+  view.month=monthOf(hi); closeModal(); renderAll();
+  const noBudgets=totalBudget()===0;
+  toast(`Added ${added} transaction${added===1?'':'s'}.`, noBudgets?{label:'Suggest budgets',fn:suggestBudgets}:null);
+}
+function closeModal(){$('#modal').hidden=true;$('#modal').innerHTML='';pending=null}
+
+/* ---------- actions ---------- */
+function suggestBudgets(){
+  const k=view.month, sums={}; let n=0;
+  for(let i=1;i<=3;i++){const s=summarize(addMonths(k,-i)); if(!s.list.length) continue; n++; for(const [c,v] of Object.entries(s.by)) sums[c]=(sums[c]||0)+v}
+  if(!n){const s=summarize(k); n=1; Object.assign(sums,s.by)}
+  const b={};
+  for(const [c,v] of Object.entries(sums)){const avg=v/n; if(avg>=5&&c!=='uncat') b[c]=avg>200?Math.ceil(avg/25)*25:Math.ceil(avg/5)*5}
+  S.settings.budgets=b; persist([]); renderAll();
+  toast(`Budgets set from your average over ${n} month${n>1?'s':''}. Trim the wants to save more.`);
+}
+async function saveFile(filename,data){
+  if(!window.claude){ // installed app or plain browser: a normal download works
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:/\.json$/.test(filename)?'application/json':'text/csv'}));
+    a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),4000); return;
+  }
+  try{
+    const dl=window.claude&&await claude.use('downloads');
+    if(!dl){toast('Saving files isn\'t available in this view.');return}
+    await dl.save({filename,data});
+  }catch(e){ if(e&&e.code!=='declined') toast("Couldn't save the file.") }
+}
+function exportCSV(){
+  const q=v=>/[",\n]/.test(v)?`"${String(v).replace(/"/g,'""')}"`:v;
+  const lines=['Date,Merchant,Category,Type,Amount,Status,Account,Description',...S.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{const c=CAT[t.cat]||CAT.uncat;return [t.date,t.merchant,c.name,c.type,t.amount.toFixed(2),t.status,t.account||'',t.desc.replace(/\s+/g,' ')].map(q).join(',')})];
+  saveFile(`pocket-ledger-${todayISO()}.csv`,lines.join('\n'));
+}
+function exportJSON(){ saveFile(`pocket-ledger-backup-${todayISO()}.json`,JSON.stringify({app:'pocket-ledger',v:1,settings:S.settings,txns:S.txns.map(({merchant,...t})=>t)})) }
+async function restoreFrom(file){
+  try{
+    const d=JSON.parse(await file.text());
+    if(d.app!=='pocket-ledger'||!Array.isArray(d.txns)) throw 0;
+    const old=new Set(S.sample?[]:S.txns.map(t=>monthOf(t.date)));
+    S.sample=false; S.settings={...defaultSettings(),...d.settings}; S.txns=d.txns.map(hydrate);
+    S.txns.forEach(t=>old.add(monthOf(t.date)));
+    persist([...old]); view.month=null; renderAll(); toast(`Restored ${S.txns.length} transactions.`);
+  }catch(e){toast("That file isn't a Pocket Ledger backup.")}
+}
+function wipe(){
+  if(!view.confirmWipe){view.confirmWipe=true;renderSetup();setTimeout(()=>{view.confirmWipe=false;renderSetup()},5000);return}
+  view.confirmWipe=false;
+  const months=[...new Set(S.txns.map(t=>monthOf(t.date)))];
+  S.txns=[]; S.settings=defaultSettings();
+  persist(months); store.clearLocal();
+  S.sample=true; S.txns=makeSample().map(hydrate); S.settings=JSON.parse(JSON.stringify(SAMPLE_SETTINGS));
+  view.month=null; renderAll(); toast('All your data is deleted. Showing example data again.');
+}
+
+let toastTimer;
+function toast(msg,action){
+  const t=$('#toast'); clearTimeout(toastTimer);
+  t.innerHTML=`<span>${esc(msg)}</span>${action?`<button id="toastAct">${esc(action.label)}</button>`:''}`;
+  t.hidden=false;
+  if(action) $('#toastAct').onclick=()=>{t.hidden=true;action.fn()};
+  toastTimer=setTimeout(()=>t.hidden=true,action?9000:5000);
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click',e=>{
+  const tab=e.target.closest('[data-tab]');
+  if(tab){view.tab=tab.dataset.tab;document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-selected',b===tab));document.querySelectorAll('main>section').forEach(s=>s.hidden=s.id!=='tab-'+view.tab);return}
+  const a=e.target.closest('[data-act]'); const act=a&&a.dataset.act;
+  if(act==='import') $('#fileIn').click();
+  else if(act==='cancel') closeModal();
+  else if(act==='commit') commitImport();
+  else if(act==='flip'){pending.txns=pending.txns.map(t=>hydrate({...t,amount:-t.amount,id:hash(t.id+'flip')}));openReview()}
+  else if(act==='suggest') suggestBudgets();
+  else if(act==='allcats'){view.showAllCats=!view.showAllCats;renderOverview()}
+  else if(act==='exportcsv') exportCSV();
+  else if(act==='exportjson') exportJSON();
+  else if(act==='restore') $('#restoreIn').click();
+  else if(act==='wipe') wipe();
+  const dr=e.target.closest('[data-delrule]');
+  if(dr){S.settings.rules.splice(+dr.dataset.delrule,1);recategorizeAll();renderAll()}
+  if(e.target.id==='modal') closeModal();
+});
+$('#importBtn').onclick=()=>$('#fileIn').click();
+$('#fileIn').onchange=e=>{handleFile(e.target.files[0]);e.target.value=''};
+document.addEventListener('change',e=>{
+  if(e.target.id==='restoreIn'){restoreFrom(e.target.files[0]);e.target.value='';return}
+  if(e.target.dataset.budget){
+    const v=parseFloat(e.target.value.replace(/[^0-9.]/g,''));
+    if(v>0) S.settings.budgets[e.target.dataset.budget]=Math.round(v); else delete S.settings.budgets[e.target.dataset.budget];
+    persist([]); renderOverview(); return;
+  }
+  if(e.target.dataset.tx){
+    const t=S.txns.find(x=>x.id===e.target.dataset.tx); if(!t) return;
+    t.cat=e.target.value; t.manual=true; persist([monthOf(t.date)],false); renderAll();
+    const c=CAT[t.cat];
+    toast(`${t.merchant} → ${c.name}.`,{label:`Always for ${t.merchant}`,fn:()=>{
+      S.settings.rules=(S.settings.rules||[]).filter(r=>r.m.toLowerCase()!==t.merchant.toLowerCase());
+      S.settings.rules.unshift({m:t.merchant,cat:t.cat}); recategorizeAll(); renderAll(); toast(`Rule saved for ${t.merchant}.`)
+    }});
+    return;
+  }
+  if(e.target.id==='setIncome'){S.settings.income=Math.max(0,parseFloat(e.target.value.replace(/[^0-9.]/g,''))||0);persist([]);renderAll()}
+  if(e.target.id==='setGoal'){S.settings.saveGoal=Math.min(90,Math.max(0,parseInt(e.target.value)||0));persist([]);renderAll()}
+  if(e.target.id==='fcat'||e.target.id==='fscope') renderTxTable();
+});
+$('#q').addEventListener('input',renderTxTable);
+function recategorizeAll(){
+  const touched=new Set();
+  for(const t of S.txns){ if(t.manual) continue; const c=categorize(t); if(c!==t.cat){t.cat=c;touched.add(monthOf(t.date))} }
+  persist([...touched]);
+}
+$('#prevM').onclick=()=>{const m=monthsWithData(),i=m.indexOf(view.month);if(i>0){view.month=m[i-1];renderAll()}};
+$('#nextM').onclick=()=>{const m=monthsWithData(),i=m.indexOf(view.month);if(i<m.length-1){view.month=m[i+1];renderAll()}};
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('#modal').hidden) closeModal()});
+let dragDepth=0;
+window.addEventListener('dragenter',e=>{if(e.dataTransfer&&[...e.dataTransfer.types].includes('Files')){dragDepth++;$('#drop').hidden=false}});
+window.addEventListener('dragleave',()=>{dragDepth=Math.max(0,dragDepth-1);if(!dragDepth)$('#drop').hidden=true});
+window.addEventListener('dragover',e=>e.preventDefault());
+window.addEventListener('drop',e=>{e.preventDefault();dragDepth=0;$('#drop').hidden=true;const f=e.dataTransfer.files[0];if(f)handleFile(f)});
+
+/* ---------- boot ---------- */
+(function boot(){
+  const local=store.readLocal();
+  if(local&&Array.isArray(local.txns)&&local.txns.length){
+    S.settings={...defaultSettings(),...local.settings}; S.txns=local.txns.map(hydrate); S.sample=false;
+  }else{
+    S.settings=JSON.parse(JSON.stringify(SAMPLE_SETTINGS)); S.txns=makeSample().map(hydrate);
+  }
+  renderAll();
+  connectDb();
+  if(!window.claude&&/^https?:$/.test(location.protocol)){ // running as the installable Windows app
+    if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+    if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+    // "Open with Pocket Ledger" on a .csv in File Explorer
+    if('launchQueue' in window) launchQueue.setConsumer(async p=>{ if(p.files&&p.files.length) handleFile(await p.files[0].getFile()) });
+  }
+})();
+</script>
+
+</body></html>

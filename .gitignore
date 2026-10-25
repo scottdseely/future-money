@@ -1,0 +1,6 @@
+# Never commit bank exports or backups
+*.csv
+*.json
+!docs/*.json
+.claude/
+node_modules/
