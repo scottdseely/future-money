@@ -1,7 +1,7 @@
-// Wraps pocket-ledger.html into an installable web app in ./docs
+// Wraps future-money.html into an installable web app in ./docs
 const fs=require('fs'), path=require('path');
 const root=path.join(__dirname,'..'), out=path.join(root,'docs');
-const page=fs.readFileSync(path.join(root,'pocket-ledger.html'),'utf8');
+const page=fs.readFileSync(path.join(root,'future-money.html'),'utf8');
 const head=`<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">

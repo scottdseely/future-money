@@ -408,11 +408,11 @@ let S={settings:defaultSettings(), txns:[], sample:true};
 let view={tab:'overview', month:null};
 
 /* ---------- storage: private per-viewer db, with on-device fallback ---------- */
-const LS_KEY='pocket-ledger-v1';
+const LS_KEY='future-money-v1';
 const store={mode:'local', profile:null,
-  readLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||'null')}catch(e){return null}},
+  readLocal(){try{return JSON.parse(localStorage.getItem(LS_KEY)||localStorage.getItem('pocket-ledger-v1')||'null')}catch(e){return null}}, // falls back to the key used before the rename
   writeLocal(){try{localStorage.setItem(LS_KEY,JSON.stringify({settings:S.settings,txns:S.txns}))}catch(e){}},
-  clearLocal(){try{localStorage.removeItem(LS_KEY)}catch(e){}},
+  clearLocal(){try{localStorage.removeItem(LS_KEY);localStorage.removeItem('pocket-ledger-v1')}catch(e){}},
 };
 let writeChain=Promise.resolve();
 function persist(months, settings=true){
@@ -865,13 +865,13 @@ async function saveFile(filename,data){
 function exportCSV(){
   const q=v=>/[",\n]/.test(v)?`"${String(v).replace(/"/g,'""')}"`:v;
   const lines=['Date,Merchant,Category,Type,Amount,Status,Account,Description',...S.txns.slice().sort((a,b)=>b.date.localeCompare(a.date)).map(t=>{const c=CAT[t.cat]||CAT.uncat;return [t.date,t.merchant,c.name,c.type,t.amount.toFixed(2),t.status,t.account||'',t.desc.replace(/\s+/g,' ')].map(q).join(',')})];
-  saveFile(`pocket-ledger-${todayISO()}.csv`,lines.join('\n'));
+  saveFile(`future-money-${todayISO()}.csv`,lines.join('\n'));
 }
-function exportJSON(){ saveFile(`pocket-ledger-backup-${todayISO()}.json`,JSON.stringify({app:'pocket-ledger',v:1,settings:S.settings,txns:S.txns.map(({merchant,...t})=>t)})) }
+function exportJSON(){ saveFile(`future-money-backup-${todayISO()}.json`,JSON.stringify({app:'future-money',v:1,settings:S.settings,txns:S.txns.map(({merchant,...t})=>t)})) }
 async function restoreFrom(file){
   try{
     const d=JSON.parse(await file.text());
-    if(d.app!=='pocket-ledger'||!Array.isArray(d.txns)) throw 0;
+    if(!['future-money','pocket-ledger'].includes(d.app)||!Array.isArray(d.txns)) throw 0;
     const old=new Set(S.sample?[]:S.txns.map(t=>monthOf(t.date)));
     S.sample=false; S.settings={...defaultSettings(),...d.settings}; S.txns=d.txns.map(hydrate);
     S.txns.forEach(t=>old.add(monthOf(t.date)));

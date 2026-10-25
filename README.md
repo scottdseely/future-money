@@ -22,6 +22,6 @@ Use **Setup > Export backup** now and then. If you uninstall the app and choose 
 
 ## Files
 
-- `pocket-ledger.html`: the app itself (the same file is also published as a Claude artifact).
+- `future-money.html`: the app itself (the same file is also published as a Claude artifact).
 - `tools/build.js`: run `node tools/build.js` after editing the page to rebuild `docs/`.
 - `docs/`: the installable app, published by GitHub Pages (Settings > Pages > Deploy from branch `main`, folder `/docs`). Any static host works.
