@@ -125,7 +125,9 @@ button{cursor:pointer}
 
 .insights{display:flex;flex-direction:column;gap:10px;margin:0;padding:0;list-style:none}
 .insights li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px}
-.insights .ic{font-family:var(--mono);color:var(--accent);font-weight:500}
+.insights .ic{font-family:var(--mono);color:var(--accent);font-weight:700;text-align:center}
+.insights .warn .ic{color:var(--bad)}
+.insights .good .ic{color:var(--good)}
 
 /* transactions */
 .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -637,7 +639,7 @@ function renderOverview(){
         </div>
         <p class="note" style="margin-top:12px">A common starting rule: about half your take-home on needs, under a third on wants, and at least a fifth saved. The tick marks the target.</p>
       </div>
-      <div class="card"><h2 style="margin-bottom:12px">What stands out</h2><ul class="insights">${insights(k,s).map(x=>`<li><span class="ic">→</span><span>${x}</span></li>`).join('')}</ul></div>
+      <div class="card"><h2 style="margin-bottom:12px">What stands out</h2><ul class="insights">${insights(k,s).map(x=>`<li class="${x.tone}"><span class="ic" aria-hidden="true">${{warn:'!',good:'✓',info:'→'}[x.tone]}</span><span>${x.html}</span></li>`).join('')}</ul></div>
     </div>
     <div class="col">
       <div class="card">
@@ -649,27 +651,89 @@ function renderOverview(){
   </div>`;
 }
 
+// Bills you can't easily change this month; left out of "everyday spending" and month-over-month swings
+const FIXED_CATS=['housing','loans','utilities','taxes'];
+const FIXED_RE=/GEICO|PROGRESSIVE|STATE FARM|ALLSTATE|INSURANCE|LEMONADE/i;
+const cutoffDay=k=>k===monthOf(todayISO())?new Date().getDate():daysInMonth(k);
+function spendThrough(k,day){
+  const by={};
+  for(const t of inMonth(k)){const c=CAT[t.cat]||CAT.uncat; if(SPEND_TYPES.includes(c.type)&&+t.date.slice(8)<=day) by[c.id]=(by[c.id]||0)-t.amount}
+  return by;
+}
+
+// Each check that fires adds a note with a score; the 4 highest-scoring notes are shown.
+// tone: 'warn' needs attention, 'good' is encouragement, 'info' is context.
 function insights(k,s){
-  const out=[];
-  const merch={};
-  for(const t of s.list){const c=CAT[t.cat]; if(c&&SPEND_TYPES.includes(c.type)&&t.amount<0) merch[t.merchant]=(merch[t.merchant]||0)-t.amount}
-  const top=Object.entries(merch).sort((a,b)=>b[1]-a[1]).slice(0,3);
-  if(top.length) out.push(`Most money went to ${top.map(([m,v])=>`<strong>${esc(m)}</strong> (${money0(v)})`).join(', ')}.`);
-  const prev=summarize(addMonths(k,-1));
-  if(prev.list.length){
-    let big=null;
-    for(const c of CATS.filter(c=>SPEND_TYPES.includes(c.type))){const d=(s.by[c.id]||0)-(prev.by[c.id]||0); if(!big||Math.abs(d)>Math.abs(big.d)) big={c,d}}
-    if(big&&Math.abs(big.d)>=20) out.push(`${esc(big.c.name)} is ${big.d>0?'up':'down'} ${money0(Math.abs(big.d))} from ${monthLabel(addMonths(k,-1)).split(' ')[0]}.`);
+  const notes=[], add=(score,tone,html)=>notes.push({score,tone,html});
+  const mName=x=>monthLabel(x).split(' ')[0];
+  const isCur=k===monthOf(todayISO()), day=cutoffDay(k), dim=daysInMonth(k);
+  const goal=S.settings.saveGoal||0, tb=totalBudget(), plan=tb>0?tb:planIncome(k)*(1-goal/100);
+
+  // Pace: only for the month in progress, once there are a few days to go on
+  if(isCur&&day>=5&&plan>0){
+    const proj=s.spend/day*dim;
+    if(proj>plan*1.05) add(90+Math.min(9,(proj-plan)/plan*20),'warn',`At this pace you'll spend about <strong>${money0(proj)}</strong> this month, ${money0(proj-plan)} more than your plan. Go easy on wants for the next ${dim-day} days.`);
+    else if(proj<plan*.9) add(40,'good',`You're on pace to finish about ${money0(plan-proj)} under plan.`);
   }
-  const dining=(s.by.dining||0)+(s.by.rides||0);
-  if(dining>0&&s.income>0) out.push(`Eating out and rides took ${Math.round(dining/s.income*100)}% of your money in (${money0(dining)}).`);
-  const fees=s.by.fees||0;
-  if(fees>0) out.push(`You paid <strong>${money(fees)}</strong> in bank fees. Many banks waive monthly fees with a minimum balance or direct deposit, so it's worth asking.`);
-  const subs=detectSubs().filter(x=>x.active);
-  if(subs.length){const m=subs.reduce((a,x)=>a+x.amount,0); out.push(`${subs.length} recurring charges add up to ${money0(m)} a month, or ${money0(m*12)} a year.`)}
-  if(s.by.uncat>0){const n=s.list.filter(t=>t.cat==='uncat').length; out.push(`${n} transaction${n>1?'s are':' is'} uncategorized. Sort them in the Transactions tab so your budget stays accurate.`)}
-  if(!out.length) out.push('Nothing unusual this month.');
-  return out;
+
+  // Savings rate: finished months only, since paychecks may not have landed yet
+  if(!isCur&&s.income>0){
+    const kept=s.income-s.spend, rate=kept/s.income*100;
+    if(kept<0) add(95,'warn',`You spent <strong>${money0(-kept)}</strong> more than came in this month.`);
+    else if(rate<goal-2){
+      const short=s.income*goal/100-kept;
+      const want=CATS.filter(c=>c.type==='want').map(c=>({c,v:s.by[c.id]||0})).sort((a,b)=>b.v-a.v)[0];
+      const tip=want&&want.v>=40?` Spending half as much on ${want.c.name.toLowerCase()} would cover ${money0(Math.min(short,want.v/2))} of that.`:'';
+      add(85+Math.min(10,(goal-rate)/2),'warn',`You kept <strong>${Math.round(rate)}%</strong> of what came in. Your goal is ${goal}%, so you're ${money0(short)} short.${tip}`);
+    }else add(rate>=goal+5?72:60,'good',`You kept <strong>${Math.round(rate)}%</strong> of what came in${goal?`, ${rate>=goal+1?'beating':'meeting'} your ${goal}% goal`:''}. Nice work.`);
+  }
+
+  // Budget overruns of at least $10
+  const over=Object.entries(S.settings.budgets).map(([id,b])=>({c:CAT[id],b:+b,v:s.by[id]||0})).filter(x=>x.c&&x.b>0&&x.v-x.b>=10).sort((a,b)=>(b.v-b.b)-(a.v-a.b));
+  if(over.length){
+    const tot=over.reduce((a,x)=>a+x.v-x.b,0);
+    add(78+Math.min(10,tot/50),'warn',`Over budget in ${over.slice(0,3).map(x=>`<strong>${esc(x.c.name)}</strong> (+${money0(x.v-x.b)})`).join(', ')}${over.length>3?` and ${over.length-3} more`:''}.`);
+  }
+
+  // Biggest swing vs. last month, measured through the same day so a half-finished month compares fairly
+  const pk=addMonths(k,-1);
+  if(inMonth(pk).length){
+    const now=spendThrough(k,day), then=spendThrough(pk,Math.min(day,daysInMonth(pk)));
+    let big=null;
+    for(const c of CATS.filter(c=>SPEND_TYPES.includes(c.type)&&!FIXED_CATS.includes(c.id))){
+      const b=then[c.id]||0, d=(now[c.id]||0)-b;
+      if(Math.abs(d)>=Math.max(25,b*.25)&&(!big||Math.abs(d)>Math.abs(big.d))) big={c,d};
+    }
+    const when=day<dim?` compared with the same point in ${mName(pk)}`:` from ${mName(pk)}`;
+    if(big) add(big.d>0?58+Math.min(12,big.d/25):42,big.d>0?'warn':'good',`${esc(big.c.name)} is ${big.d>0?'up':'down'} ${money0(Math.abs(big.d))}${when}.`);
+  }
+
+  // Everyday spending: top merchants, leaving out fixed bills, subscriptions, cash and person-to-person payments
+  const subs=detectSubs(k).filter(x=>x.active), subNames=new Set(subs.map(x=>x.merchant));
+  const merch={};
+  for(const t of s.list){
+    const c=CAT[t.cat];
+    if(!c||!SPEND_TYPES.includes(c.type)||t.amount>=0||FIXED_CATS.includes(c.id)||FIXED_RE.test(t.desc)||subNames.has(t.merchant)||['subs','people','cash','fees','uncat'].includes(c.id)) continue;
+    const m=merch[t.merchant]||(merch[t.merchant]={v:0,n:0}); m.v-=t.amount; m.n++;
+  }
+  const top=Object.entries(merch).sort((a,b)=>b[1].v-a[1].v).slice(0,3);
+  if(top.length&&top[0][1].v>=50) add(35,'info',`Your biggest everyday spending: ${top.map(([m,x])=>`<strong>${esc(m)}</strong> ${money0(x.v)}${x.n>1?` (${x.n} times)`:''}`).join(', ')}.`);
+
+  // Eating out + rides, only when it's a real share of income
+  const dr=(s.by.dining||0)+(s.by.rides||0);
+  if(s.income>0&&dr/s.income>=.1) add(50+Math.min(15,(dr/s.income-.1)*100),'warn',`Eating out and rides took ${Math.round(dr/s.income*100)}% of your money in (${money0(dr)}).`);
+
+  if((s.by.fees||0)>0) add(55,'warn',`You paid <strong>${money(s.by.fees)}</strong> in bank fees. Many banks waive monthly fees with a minimum balance or direct deposit, so it's worth asking.`);
+
+  // only charges you could cancel (subscriptions, gym), not rent or phone
+  const optional=subs.filter(x=>(CAT[x.cat]||CAT.uncat).type==='want');
+  if(optional.length){const m=optional.reduce((a,x)=>a+x.amount,0); if(m>=30) add(45,'info',`${optional.length} subscription${optional.length>1?'s add':' adds'} up to ${money0(m)} a month, or ${money0(m*12)} a year. Cancel any you haven't used lately.`)}
+
+  const un=s.list.filter(t=>t.cat==='uncat');
+  if(un.length){const amt=-un.reduce((a,t)=>a+t.amount,0); add(amt>s.spend*.05?65:30,'info',`${un.length} transaction${un.length>1?'s are':' is'} uncategorized (${money0(amt)}). Sort them in the Transactions tab so your budget stays accurate.`)}
+
+  notes.sort((a,b)=>b.score-a.score);
+  return notes.length?notes.slice(0,4):[{tone:'good',html:'Nothing unusual this month.'}];
 }
 
 /* transactions */
@@ -726,13 +790,16 @@ function renderTrends(){
 }
 
 /* subscriptions */
-function detectSubs(){
+// k (optional): only look at charges up to the end of that month, as if viewing it then
+function detectSubs(k){
+  const end=k?(k===monthOf(todayISO())?todayISO():`${k}-${pad(daysInMonth(k))}`):null;
+  const pool=end?S.txns.filter(t=>t.date<=end):S.txns;
   const groups={};
-  for(const t of S.txns){
+  for(const t of pool){
     const c=CAT[t.cat]; if(t.amount>=0||!c||!['want','need','other'].includes(c.type)||['cash','people','groceries','dining','rides','shopping','transport','fees'].includes(c.id)) continue;
     (groups[t.merchant]=groups[t.merchant]||[]).push(t);
   }
-  const latest=S.txns.reduce((a,t)=>t.date>a?t.date:a,'');
+  const latest=end||pool.reduce((a,t)=>t.date>a?t.date:a,'');
   const out=[];
   for(const [m,list] of Object.entries(groups)){
     const months=new Set(list.map(t=>monthOf(t.date)));
